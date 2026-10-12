@@ -61,6 +61,15 @@ infinity generate --checkpoint runs/hyper-5.5-tiny --prompt "def read_config(pat
 Training writes `runs/<name>/train_log.jsonl`. It contains only measured
 values (loss, validation loss, learning rate, gradient norm, elapsed time).
 
+## Make it smarter (tool-use fine-tuning and benchmarks)
+
+```bash
+infinity sft generate --out runs/sft-v2            # expert transcripts replayed through the real runtime
+infinity sft train --base runs/hyper-5.5-tiny --data runs/sft-v2 --out runs/my-sft --lm-mix 0.25
+infinity bench run --checkpoint runs/my-sft --sft runs/sft-v2      # lm, protocol, live repair (recorded)
+infinity model promote --checkpoint runs/my-sft/checkpoints/step_001000 --reason "..."   # explicit; needs results
+```
+
 ## Run the agent
 
 ```bash
@@ -117,4 +126,5 @@ cd studio && npm test       # UI: core-state mapping, command dock, execution st
 - `docs/ARCHITECTURE.md`: system design, permission matrix, outcome judging
 - `docs/FEASIBILITY.md`: hardware report, model config, data strategy, compute budget, plan
 - `docs/FEATURES.md`: implemented / partial / not implemented
+- `docs/TRAINING_REPORT.md`, `docs/FINETUNE_REPORT.md`: measured training and fine-tuning results
 - `docs/PERMISSIONS.md`, `docs/TROUBLESHOOTING.md`

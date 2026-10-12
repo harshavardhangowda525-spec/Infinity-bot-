@@ -14,9 +14,10 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Inference: streaming, sampling controls, cancellation | ✅ | |
 | Licensed data pipeline: allow-list, secret/PII filter, dedup, per-document splits, provenance | ✅ | `data/manifest.json`, `data/PROVENANCE.md` |
 | Trained prototype checkpoint (5.8M params, 6.1M tokens) | ✅ | `docs/TRAINING_REPORT.md`. Produces code-shaped text only |
-| Model good enough to drive the agent | ⬜ | needs a large corpus, GPU training and tool-use fine-tuning |
-| Instruction / tool-use fine-tuning pipeline | ⬜ | Phase 6 |
-| Benchmark suite (coding, tool use, retrieval…) | ⬜ | held-out validation loss only so far |
+| Model good enough to drive the agent | ⬜ | tool-use SFT reached 100% valid actions but 0/30 live repairs; see `docs/FINETUNE_REPORT.md` |
+| Tool-use fine-tuning pipeline (runtime-verified expert data, masked loss, context extension, LM rehearsal, lineage) | ✅ | `infinity sft generate/train`, `tests/test_sft_bench.py` |
+| Benchmark suite: lm perplexity, protocol validity, live repair; recorded with checkpoint hash | ✅ | `infinity bench run/list`; Intelligence view |
+| Explicit model promotion gated on recorded benchmarks | ✅ | `infinity model promote` (nothing promoted yet) |
 | Hardware audit and model-size recommendation | ✅ | `infinity audit` |
 
 ## INFINITY BRAIN (agent runtime)
@@ -37,7 +38,7 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | SQLite memory: sessions, tasks, tool calls, project notes, preferences, trust, experiences | ✅ | inspect, export, delete, wipe; refuses secrets |
 | Experience retrieval before tasks | 🟡 | keyword overlap; no embeddings |
 | Project detection (language, framework, package manager, test commands) | ✅ | `infinity/agent/project.py` |
-| Project-wide index (symbols, call sites) | ⬜ | search and read tools only |
+| Project-wide code index (symbols, references, imports; incremental) | ✅ | `find_symbol`, `find_references`, `code_overview`; Python via ast, JS/TS via regex |
 | Browser automation / API testing tools | ⬜ | |
 | Blender integration | ⬜ | Blender is not installed in the dev environment |
 | JARVIS / ASTON / other agent integrations | ⬜ | none present in this repository |
@@ -60,7 +61,7 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Project launcher: open folder with permission, recent projects, detection, last task | ✅ | |
 | Minimal ↔ workspace view switch; responsive desktop / tablet / mobile | ✅ | screenshots at 1440×900 and 390×844 |
 | Live website preview panel | ⬜ | |
-| Intelligence panel with benchmark history | ⬜ | no benchmarks exist yet |
+| Intelligence panel with benchmark history | ✅ | Intelligence view in the floating navigation |
 
 ## Platform (image 2)
 
