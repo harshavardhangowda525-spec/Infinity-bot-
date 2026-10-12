@@ -270,6 +270,16 @@ class RuntimeHub:
         self.set_model(model, None)
 
     def autoload_latest(self) -> None:
+        """Load the explicitly promoted checkpoint (runs/ACTIVE.json) if any, else the newest one."""
+        active = self.base_dir / "runs" / "ACTIVE.json"
+        if active.exists():
+            import json as _json
+
+            try:
+                self.load_model(_json.loads(active.read_text())["checkpoint"])
+            except (ModelUnavailable, KeyError, ValueError) as e:
+                self.set_model(None, f"promoted checkpoint failed to load: {e}")
+            return
         ckpts = find_checkpoints(self.base_dir)
         if not ckpts:
             self.set_model(None, "no trained checkpoint found under runs/ — run `infinity train` first")

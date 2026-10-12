@@ -192,7 +192,7 @@ def test_project_instructions_and_memory_in_prompt(project, tmp_path):
 
 
 def test_context_truncation_noted(project):
-    model = ScriptedModel(lambda m: act("read_file", {"path": "math_utils.py"}), context_tokens=500)
+    model = ScriptedModel(lambda m: act("read_file", {"path": "math_utils.py"}), context_tokens=120)
     r = Agent(model, project, auto_policy(), Mode.CODE, limits=Limits(max_steps=3, max_new_tokens=100)).run("x")
     assert any("context window" in n for n in r.notes)
 

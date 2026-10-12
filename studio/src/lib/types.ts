@@ -12,7 +12,7 @@ export interface ModelStatus {
   step?: number;
   parameters?: number;
   context_length?: number;
-  metrics?: Record<string, number>;
+  metrics?: Record<string, unknown>;
 }
 
 export interface TaskSummary {
@@ -267,4 +267,31 @@ export interface AdminOverview {
   payment_provider: { configured: boolean; mode: string };
   ledger_duplicates: unknown[];
   database: { migrations: { version: number; applied_at: number }[]; path: string };
+}
+
+export interface BenchResult {
+  id: number;
+  created_at: number;
+  suite: "lm" | "protocol" | "repair";
+  checkpoint: string;
+  run: string;
+  step: number;
+  model_sha256: string;
+  config: Record<string, unknown>;
+  metrics: Record<string, number | string | Record<string, unknown>> & {
+    perplexity?: number; valid_action_rate?: number; tool_match_rate?: number; exact_action_rate?: number;
+    verified_success_rate?: number; tasks?: number;
+  };
+  duration_s: number;
+}
+
+export interface Intelligence {
+  product: string;
+  model: ModelStatus & { tokenizer_fingerprint?: string; metrics?: Record<string, unknown> };
+  promotion: { checkpoint: string; step: number; promoted_at: number; reason: string } | null;
+  benchmarks: BenchResult[];
+  index: ({ files: number; symbols: number; references: number; languages: Record<string, number>; parse_errors: Record<string, string> }) | { error: string } | null;
+  memory: { experiences: number; project_notes: number; relevant_to_last_task: number };
+  agent: { busy: boolean; awaiting_approval: boolean; task: TaskSummary | null };
+  plan: string[] | null;
 }

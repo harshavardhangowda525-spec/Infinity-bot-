@@ -52,6 +52,11 @@ MODE_INSTRUCTIONS = {
 }
 
 PROJECT_INSTRUCTION_FILES = ("INFINITY.md", "AGENTS.md", "CLAUDE.md")
+# Models with a context window smaller than this get the compact prompt format.
+# The tool-use fine-tuning data is generated through the same code path, so
+# training prompts and inference prompts are identical.
+COMPACT_CONTEXT_THRESHOLD = 2048
+COMPACT_OBSERVATION_CHARS = 600
 
 
 class Outcome(str, Enum):
@@ -181,7 +186,40 @@ class Agent:
                 parts.append(f"# {name}\n{p.read_text(errors='replace')[:8000]}")
         return "\n\n".join(parts)
 
+    @property
+    def compact(self) -> bool:
+        return self.model.max_context_tokens < COMPACT_CONTEXT_THRESHOLD
+
+    @property
+    def new_tokens(self) -> int:
+        if self.compact:
+            return min(self.limits.max_new_tokens, max(64, self.model.max_context_tokens // 3))
+        return self.limits.max_new_tokens
+
+    @property
+    def observation_chars(self) -> int:
+        return min(self.limits.observation_chars, COMPACT_OBSERVATION_CHARS) if self.compact else self.limits.observation_chars
+
+    def compact_system_prompt(self) -> str:
+        names = self.registry.names(read_only=self.mode in READ_ONLY_MODES)
+        return (f"{PRODUCT} agent. Mode {self.mode.value}. Reply with one JSON action: "
+                '{"thought","tool","args"} or {"thought","final":{"status","summary"}}. Tools: ' + " ".join(names))
+
+    def _relevant_code(self, task: str) -> str:
+        try:
+            from .index import CodeIndex
+
+            idx = CodeIndex(self.workspace.root)
+            idx.update()
+            rows = idx.relevant(task, 8)
+            idx.close()
+        except Exception:
+            return ""
+        return "\n".join(f"- {r['path']}" + (f":{r['line']} {r['signature']}" if r["kind"] != "file" else "") for r in rows)
+
     def system_prompt(self, task: str) -> str:
+        if self.compact:
+            return self.compact_system_prompt()
         tool_names = self.registry.names(read_only=self.mode in READ_ONLY_MODES)
         tools = "\n".join("- " + self.registry.get(n).signature() for n in tool_names)
         sections = [
@@ -198,6 +236,9 @@ class Agent:
             "requirement is missing.",
             "Tools:\n" + tools,
         ]
+        relevant = self._relevant_code(task)
+        if relevant:
+            sections.append("Possibly relevant code (from the project index):\n" + relevant)
         instructions = self._project_instructions()
         if instructions:
             sections.append("Project instructions (authorized by the workspace owner):\n" + instructions)
@@ -212,7 +253,7 @@ class Agent:
         return "\n\n".join(sections)
 
     def _fit(self, system: str, task: str, history: list[Message]) -> tuple[list[Message], bool]:
-        budget = self.model.max_context_tokens - self.limits.max_new_tokens
+        budget = self.model.max_context_tokens - self.new_tokens
         base = [Message("system", system), Message("user", task)]
         msgs = base + history
         dropped = False
@@ -269,7 +310,7 @@ class Agent:
                 truncated_noted = True
             self._emit(type="state", state="thinking", step=step)
             try:
-                comp = self.model.complete(msgs, self.limits.max_new_tokens, cancel=self.cancel)
+                comp = self.model.complete(msgs, self.new_tokens, cancel=self.cancel)
             except ModelUnavailable as e:
                 status, reason = Outcome.BLOCKED, f"model unavailable: {e}"
                 break
@@ -311,7 +352,7 @@ class Agent:
                 self._emit(type="state", state=_state_for(action.tool, action.args), step=step,
                            tool=action.tool, args=_safe_args(action.args))
                 res = self.registry.execute(action.tool, action.args, ctx)
-                result_text = res.for_model(self.limits.observation_chars)
+                result_text = res.for_model(self.observation_chars)
                 ok, dur = res.ok, res.duration_ms
                 extra = {k: res.data[k] for k in ("diff", "path", "exit_code", "status") if k in res.data}
                 if not res.ok:
@@ -377,7 +418,8 @@ def _safe_args(args: dict) -> dict:
 
 
 def _state_for(tool: str, args: dict) -> str:
-    if tool in ("list_dir", "find_files", "search_text", "read_file", "git_status", "git_diff", "git_log", "process_output"):
+    if tool in ("list_dir", "find_files", "search_text", "read_file", "git_status", "git_diff", "git_log", "process_output",
+                "find_symbol", "find_references", "code_overview"):
         return "inspecting"
     if tool in ("write_file", "edit_file", "make_dir", "move_path", "delete_path"):
         return "applying_changes"

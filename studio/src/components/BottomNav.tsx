@@ -1,4 +1,4 @@
-export type View = "home" | "tokens" | "plans" | "keys" | "admin";
+export type View = "home" | "intelligence" | "tokens" | "plans" | "keys" | "admin";
 
 const ITEMS: { id: View; label: string; ownerOnly?: boolean; icon: JSX.Element }[] = [
   {
@@ -7,6 +7,15 @@ const ITEMS: { id: View; label: string; ownerOnly?: boolean; icon: JSX.Element }
     icon: (
       <svg width="20" height="12" viewBox="0 0 64 32" aria-hidden>
         <path d="M32 16c-6-8-12-12-18-12a12 12 0 0 0 0 24c6 0 12-4 18-12s12-12 18-12a12 12 0 0 1 0 24c-6 0-12-4-18-12z" fill="none" stroke="currentColor" strokeWidth="4" />
+      </svg>
+    ),
+  },
+  {
+    id: "intelligence",
+    label: "Intelligence",
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+        <path d="M4 19h16M7 16V9M12 16V5M17 16v-4" />
       </svg>
     ),
   },

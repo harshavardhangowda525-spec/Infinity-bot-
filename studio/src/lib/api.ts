@@ -1,5 +1,5 @@
 import type {
-  AdminOverview, AdminUser, AgentEvent, ApiKey, AuditEvent, BillingMe, Catalog, Checkpoint, CheckoutResult, Me, Mode,
+  AdminOverview, AdminUser, Intelligence, AgentEvent, ApiKey, AuditEvent, BillingMe, Catalog, Checkpoint, CheckoutResult, Me, Mode,
   Permission, Plan, Project, RecentProject, Status, TreeNode,
 } from "./types";
 
@@ -70,6 +70,8 @@ export const api = {
     request(`/api/approvals/${id}`, { method: "POST", body: JSON.stringify({ approve }) }),
   rollback: (session: string) =>
     request<{ restored: string[] }>("/api/rollback", { method: "POST", body: JSON.stringify({ session }) }),
+
+  intelligence: () => request<Intelligence>("/api/intelligence"),
 
   // ---- accounts
   setup: () => request<{ owner_exists: boolean; registration: boolean }>("/api/setup"),

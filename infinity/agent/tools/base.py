@@ -50,12 +50,21 @@ class ToolContext:
     last_edit_step: int = -1
     checks: list[dict] = field(default_factory=list)
     _checkpoints: CheckpointStore | None = None
+    _index: object | None = None
 
     @property
     def checkpoints(self) -> CheckpointStore:
         if self._checkpoints is None:
             self._checkpoints = CheckpointStore(self.workspace.root, self.session_id)
         return self._checkpoints
+
+    @property
+    def code_index(self):
+        if self._index is None:
+            from ..index import CodeIndex
+
+            self._index = CodeIndex(self.workspace.root)
+        return self._index
 
     def note_modified(self, rel: str) -> None:
         if rel not in self.modified:

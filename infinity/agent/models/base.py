@@ -33,6 +33,11 @@ class ModelUnavailable(RuntimeError):
     pass
 
 
+def render_chat(messages: Sequence[Message]) -> str:
+    """The one chat template used by INFINITY HYPER 5.5 for inference AND fine-tuning data."""
+    return "".join(f"<|{m.role}|>{m.content}<|end|>" for m in messages) + "<|assistant|>"
+
+
 class ModelAdapter:
     name = "base"
     native_tool_calling = False
@@ -120,7 +125,7 @@ class NeuralCoreModel(ModelAdapter):
         return len(self.engine.tokenizer.encode(text)), True
 
     def render(self, messages: Sequence[Message]) -> str:
-        return "".join(f"<|{m.role}|>{m.content}<|end|>" for m in messages) + "<|assistant|>"
+        return render_chat(messages)
 
     def complete(self, messages, max_new_tokens=512, cancel=None) -> Completion:
         prompt = self.render(messages)

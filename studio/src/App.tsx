@@ -13,6 +13,7 @@ import { num } from "./lib/format";
 import { useStore } from "./lib/store";
 import type { Checkpoint, Me, Mode } from "./lib/types";
 import AdminView from "./views/AdminView";
+import IntelligenceView from "./views/IntelligenceView";
 import KeysView from "./views/KeysView";
 import PlansView from "./views/PlansView";
 import TokensView from "./views/TokensView";
@@ -171,6 +172,7 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
       {view !== "home" && (
         <div className="absolute inset-0 z-20">
           {view === "plans" && <PlansView entitlement={ent} onBack={() => setView("home")} />}
+          {view === "intelligence" && <IntelligenceView />}
           {view === "tokens" && <TokensView onPlans={() => setView("plans")} />}
           {view === "keys" && <KeysView apiAllowed={ent.api || isOwner} onPlans={() => setView("plans")} />}
           {view === "admin" && isOwner && <AdminView />}

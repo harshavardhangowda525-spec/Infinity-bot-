@@ -331,6 +331,46 @@ def create_app(hub: RuntimeHub, platform: Platform, static_dir: Path | None = No
         P.audit.record(user.id, "model.switch", body.checkpoint, request_id=request.state.request_id)
         return hub.model_status()
 
+    @app.get("/api/intelligence")
+    def intelligence(user: User = Depends(user_dep)):
+        import json as _json
+
+        from ..bench.runner import BenchStore
+
+        rt = rt_for(user)
+        model = hub.model_status()
+        active_file = hub.base_dir / "runs" / "ACTIVE.json"
+        store_path = hub.base_dir / "runs" / "benchmarks.db"
+        benchmarks = BenchStore(store_path).list(limit=100) if store_path.exists() else []
+        index = None
+        if rt.workspace is not None:
+            try:
+                from ..agent.index import CodeIndex
+
+                idx = CodeIndex(rt.workspace.root)
+                idx.update()
+                index = idx.stats()
+                idx.close()
+            except Exception as e:  # report, never hide
+                index = {"error": str(e)}
+        mem = hub.memory
+        ws = str(rt.workspace.root) if rt.workspace else None
+        memory = {
+            "experiences": mem._rows("SELECT COUNT(*) AS n FROM experiences")[0]["n"],
+            "project_notes": len(mem.notes(ws)) if ws else 0,
+            "relevant_to_last_task": len(mem.relevant_experiences(rt.task["task"], ws)) if rt.task else 0,
+        }
+        return {
+            "product": "INFINITY HYPER 5.5",
+            "model": model,
+            "promotion": _json.loads(active_file.read_text()) if active_file.exists() else None,
+            "benchmarks": benchmarks,
+            "index": index,
+            "memory": memory,
+            "agent": rt.status()["agent"],
+            "plan": (rt.task or {}).get("report", {}).get("plan") if rt.task and rt.task.get("report") else None,
+        }
+
     @app.get("/api/projects")
     def projects(user: User = Depends(user_dep)):
         rt = rt_for(user)

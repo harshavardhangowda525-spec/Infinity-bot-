@@ -19,6 +19,7 @@ import json
 import signal
 import sys
 import threading
+import time
 from pathlib import Path
 
 
@@ -241,6 +242,62 @@ def cmd_admin(args) -> int:
     return 0
 
 
+def cmd_sft(args) -> int:
+    if args.action == "generate":
+        from .core.tokenizer import BPETokenizer
+        from .sft.generate import generate
+
+        tok = BPETokenizer.load(Path(args.tokenizer))
+        print(json.dumps(generate(args.out, tok, args.context, args.train, args.eval, args.seed), indent=2))
+    else:
+        from .sft.finetune import finetune
+
+        stop = threading.Event()
+        signal.signal(signal.SIGINT, lambda s, f: stop.set())
+        print(json.dumps(finetune(args.base, args.data, args.out, steps=args.steps, context=args.context,
+                                  batch_size=args.batch_size, lr=args.lr, stop_flag=stop), indent=2))
+    return 0
+
+
+def cmd_bench(args) -> int:
+    from .bench.runner import BenchStore, run
+
+    if args.action == "list":
+        for r in BenchStore(args.store).list(args.checkpoint):
+            print(f"#{r['id']:<4} {r['suite']:<9} {r['run']} step {r['step']:<6} {json.dumps(r['metrics'])[:160]}")
+        return 0
+    run(args.checkpoint, args.suites.split(","), args.store, args.data, args.sft, n_repair=args.n_repair, n_protocol=args.n_protocol)
+    return 0
+
+
+def cmd_model(args) -> int:
+    from .bench.runner import BenchStore
+    from .core.checkpoint import resolve_checkpoint, verify_checkpoint
+
+    active = Path(args.base) / "runs" / "ACTIVE.json"
+    if args.action == "active":
+        print(active.read_text() if active.exists() else "no promoted model (studio loads the newest checkpoint)")
+        return 0
+    ckpt = resolve_checkpoint(args.checkpoint)
+    manifest = verify_checkpoint(ckpt)
+    results = BenchStore(args.store).list(str(ckpt))
+    if not results and not args.force_unbenchmarked:
+        print("refusing to promote: no benchmark results recorded for this checkpoint (run `infinity bench run` first)", file=sys.stderr)
+        return 1
+    if not args.reason:
+        print("--reason is required", file=sys.stderr)
+        return 2
+    record = {"checkpoint": str(ckpt), "step": manifest["step"], "model_sha256": manifest["sha256"]["model.pt"],
+              "promoted_at": time.time(), "reason": args.reason, "benchmark_result_ids": [r["id"] for r in results]}
+    if active.exists():
+        hist = active.with_name("ACTIVE_HISTORY.jsonl")
+        with open(hist, "a") as f:
+            f.write(active.read_text().strip() + "\n")
+    active.write_text(json.dumps(record, indent=2))
+    print(f"promoted {ckpt} (previous promotion kept in runs/ACTIVE_HISTORY.jsonl)")
+    return 0
+
+
 def cmd_studio(args) -> int:
     from .server.app import main as studio_main
 
@@ -313,6 +370,41 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("value", nargs="?", default="")
     m.add_argument("--db", default=None)
     m.set_defaults(fn=cmd_memory)
+    sf = sub.add_parser("sft", help="tool-use fine-tuning: generate data with the real runtime, then fine-tune")
+    sf.add_argument("action", choices=["generate", "train"])
+    sf.add_argument("--tokenizer", default="runs/data/tokenizer.json")
+    sf.add_argument("--out", default="runs/sft")
+    sf.add_argument("--context", type=int, default=512)
+    sf.add_argument("--train", type=int, default=2000)
+    sf.add_argument("--eval", type=int, default=100)
+    sf.add_argument("--seed", type=int, default=1337)
+    sf.add_argument("--base", default="runs/hyper-5.5-tiny")
+    sf.add_argument("--data", default="runs/sft")
+    sf.add_argument("--steps", type=int, default=1200)
+    sf.add_argument("--batch-size", type=int, default=16)
+    sf.add_argument("--lr", type=float, default=1e-3)
+    sf.set_defaults(fn=cmd_sft)
+
+    be = sub.add_parser("bench", help="run / list recorded benchmarks")
+    be.add_argument("action", choices=["run", "list"])
+    be.add_argument("--checkpoint", default=None)
+    be.add_argument("--suites", default="lm,protocol,repair")
+    be.add_argument("--store", default="runs/benchmarks.db")
+    be.add_argument("--data", default="runs/data")
+    be.add_argument("--sft", default="runs/sft")
+    be.add_argument("--n-repair", type=int, default=30)
+    be.add_argument("--n-protocol", type=int, default=200)
+    be.set_defaults(fn=cmd_bench)
+
+    mo = sub.add_parser("model", help="promote a benchmarked checkpoint (explicit, recorded)")
+    mo.add_argument("action", choices=["promote", "active"])
+    mo.add_argument("--checkpoint", default=None)
+    mo.add_argument("--reason", default=None)
+    mo.add_argument("--store", default="runs/benchmarks.db")
+    mo.add_argument("--base", default=".")
+    mo.add_argument("--force-unbenchmarked", action="store_true")
+    mo.set_defaults(fn=cmd_model)
+
     ad = sub.add_parser("admin", help="owner account and platform administration")
     ad.add_argument("action", choices=["create-owner", "users", "grant-plan", "audit-verify"])
     ad.add_argument("--email", default=None)

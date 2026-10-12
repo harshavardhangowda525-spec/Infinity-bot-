@@ -7,7 +7,8 @@ from .base import (
     NeuralCoreModel,
     ScriptedModel,
     load_model,
+    render_chat,
 )
 
 __all__ = ["PRODUCT", "Completion", "Message", "ModelAdapter", "ModelUnavailable", "NeuralCoreModel",
-           "ScriptedModel", "load_model"]
+           "ScriptedModel", "load_model", "render_chat"]

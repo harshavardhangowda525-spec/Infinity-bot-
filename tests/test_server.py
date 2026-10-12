@@ -282,3 +282,15 @@ def test_cancel_running_task(env):
     wait_idle(rt)
     assert rt.task["report"]["status"] == "cancelled"
     assert rt.task["report"]["billing"]["owner_exempt"] is True
+
+
+def test_intelligence_endpoint_reports_real_state(env):
+    u, c = env.user()
+    r = c.get("/api/intelligence").json()
+    assert r["product"] == "INFINITY HYPER 5.5"
+    assert r["model"]["state"] == "unavailable" and r["benchmarks"] == [] and r["promotion"] is None
+    assert r["index"] is None  # no workspace yet
+    env.paid(u)
+    c.post("/api/workspace", json={"path": str(env.proj), "permission": "auto"})
+    r = c.get("/api/intelligence").json()
+    assert r["index"]["files"] >= 1 and "python" in r["index"]["languages"]
