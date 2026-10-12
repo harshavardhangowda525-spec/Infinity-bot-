@@ -13,7 +13,7 @@ from infinity.core.model import InfinityNeuralCore
 from infinity.core.tokenizer import BPETokenizer
 from infinity.sft.finetune import encode_example, finetune
 from infinity.sft.generate import generate
-from infinity.sft.tasks import SUFFIX_POOLS, VAR_PAIRS, expert_actions, make_tasks
+from infinity.sft.tasks import SYLLABLES, expert_actions, make_tasks
 
 
 @pytest.fixture(scope="module")
@@ -32,8 +32,7 @@ def base_ckpt(tok, tmp_path_factory):
 
 
 def test_task_splits_are_disjoint_and_deterministic():
-    assert not set(SUFFIX_POOLS["train"]) & set(SUFFIX_POOLS["eval"])
-    assert not {v for v, _ in VAR_PAIRS["train"]} & {v for v, _ in VAR_PAIRS["eval"]}
+    assert not set(SYLLABLES["train"]) & set(SYLLABLES["eval"])
     a = make_tasks("train", 20, 1)
     assert [t.files for t in a] == [t.files for t in make_tasks("train", 20, 1)]
     ev = make_tasks("eval", 20, 1)
@@ -46,11 +45,13 @@ def test_expert_transcripts_verify_through_real_runtime(tok, tmp_path):
     s = generate(tmp_path / "sft", tok, 256, 6, 3, log=lambda m: None)
     assert s["splits"]["train"]["kept"] == 6 and s["splits"]["train"]["rejected"] == 0
     rows = [json.loads(l) for l in open(tmp_path / "sft" / "train.jsonl")]
-    assert [r["tool"] for r in rows[:5]] == ["run_command", "read_file", "edit_file", "run_command", "final"]
+    assert [r["tool"] for r in rows[:6]] == ["list_dir", "run_command", "read_file", "edit_file", "run_command", "final"]
     first = rows[0]["prompt"]
     assert first.startswith("<|system|>INFINITY HYPER 5.5 agent.") and first.endswith("<|assistant|>")
-    # step 2's prompt contains the REAL tool output of the failing test run
-    assert "FAILED" in rows[1]["prompt"] or "Error" in rows[1]["prompt"]
+    # step 3's prompt contains the REAL tool output of the failing test run
+    assert "FAILED" in rows[2]["prompt"] or "Error" in rows[2]["prompt"]
+    # train names are generated: many distinct modules, so copying (not recall) is required
+    assert len({t.module_file for t in make_tasks("train", 200, 1)}) > 150
 
 
 def test_masked_encoding_mirrors_inference_truncation(tok):
@@ -66,6 +67,7 @@ def test_masked_encoding_mirrors_inference_truncation(tok):
 def test_finetune_creates_new_run_with_lineage(tok, base_ckpt, tmp_path):
     generate(tmp_path / "sft", tok, 192, 8, 4, log=lambda m: None)
     r = finetune(str(base_ckpt), tmp_path / "sft", tmp_path / "out", steps=30, context=192, batch_size=8, lr=3e-3, eval_every=15, log=lambda m: None)
+    assert (tmp_path / "out" / "checkpoints" / "step_000015").exists()  # intermediate checkpoint for selection
     assert r["eval_loss_after"] < r["eval_loss_before"]
     m = NeuralCoreModel(r["checkpoint"])
     info = m.info()

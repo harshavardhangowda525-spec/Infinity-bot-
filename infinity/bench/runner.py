@@ -150,7 +150,8 @@ def bench_repair(model: NeuralCoreModel, n: int = 30, seed: int = 1337, max_step
 
 
 def run(checkpoint: str, suites: list[str], store_path: str | Path, data_dir: str | Path = "runs/data",
-        sft_dir: str | Path = "runs/sft", n_repair: int = 30, n_protocol: int = 200, log=print) -> list[dict]:
+        sft_dir: str | Path = "runs/sft", n_repair: int = 30, n_protocol: int = 200, repair_seed: int = 1337,
+        log=print) -> list[dict]:
     model = NeuralCoreModel(checkpoint, temperature=0.0)
     info = _info(model)
     store = BenchStore(store_path)
@@ -162,7 +163,7 @@ def run(checkpoint: str, suites: list[str], store_path: str | Path, data_dir: st
         elif suite == "protocol":
             metrics, cfg = bench_protocol(model, Path(sft_dir) / "eval.jsonl", n_protocol)
         elif suite == "repair":
-            metrics, cfg = bench_repair(model, n_repair)
+            metrics, cfg = bench_repair(model, n_repair, seed=repair_seed)
         else:
             raise ValueError(f"unknown suite {suite!r}")
         dur = time.time() - t0

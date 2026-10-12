@@ -4,12 +4,13 @@ Every task is a tiny Python project (module + unittest file) with exactly one
 injected bug, plus the ground-truth fix. Families:
 
 - ``typo``:    a misspelled variable. The fix is visible in the real tool
-               output (Python prints ``Did you mean: 'total'?``).
+               output (the parameter name in ``read_file``; Python also prints
+               ``Did you mean: '...'?``).
 - ``operator``: a wrong arithmetic operator. The intended operation is
                signalled by the function-name prefix (add_/sub_/mul_).
 - ``compare``: a flipped comparison. Signalled by is_above_/is_below_.
 
-Train and eval tasks use DISJOINT identifier pools and different value
+Train and eval tasks use identifiers generated from DISJOINT syllable sets and different value
 ranges, so eval measures generalisation to unseen names within these
 templates. It does not measure general coding ability.
 """
@@ -21,22 +22,28 @@ from dataclasses import dataclass, field
 
 TEST_COMMAND = "python3 -m unittest -q"
 
-SUFFIX_POOLS = {
-    "train": ["rx", "kt", "lumen", "orbit", "delta", "vex", "nova", "pyl", "quark", "zen", "flux", "core", "mint",
-              "arc", "bolt", "echo", "fern", "glyph", "halo", "ion", "jade", "kite", "loop", "moss", "nim", "opal",
-              "pike", "reef", "sage", "tide", "umbra", "volt", "wisp", "yarn", "zinc", "amber", "brook", "cedar"],
-    "eval": ["prism", "comet", "dune", "ember", "frost", "grove", "harbor", "iris", "juniper", "kelp", "lotus",
-             "maple", "nectar", "onyx", "pebble", "quill", "raven", "spruce", "thorn", "unity"],
+# Identifiers are generated from DISJOINT syllable sets, so train and eval never share
+# a name and the model must copy names from observations instead of memorising them.
+SYLLABLES = {
+    "train": ["ka", "ro", "mi", "tu", "ne", "sa", "lo", "vi", "pe", "da", "fu", "zo", "ri", "ba", "go", "hu", "te", "ni"],
+    "eval": ["el", "an", "or", "is", "ut", "om", "ex", "ay", "ib", "uk"],
 }
-MODULE_POOLS = {
-    "train": ["calc", "mathx", "ops", "numbers", "arith", "logic", "metrics", "units", "scores", "ledger", "stats", "tally"],
-    "eval": ["engine", "kernel", "compute", "toolkit", "helpers", "finance"],
-}
-VAR_PAIRS = {
-    "train": [("total", "totl"), ("count", "cuont"), ("price", "prcie"), ("value", "vlaue"), ("amount", "amuont"),
-              ("width", "widht"), ("height", "heigth"), ("speed", "sped"), ("weight", "wieght"), ("score", "socre")],
-    "eval": [("length", "lenght"), ("budget", "budgte"), ("factor", "facotr"), ("radius", "raduis"), ("volume", "volmue")],
-}
+SUFFIX_POOLS = SYLLABLES  # kept for backwards compatibility in tests
+
+
+def _word(rng: random.Random, split: str, lo: int = 2, hi: int = 3) -> str:
+    return "".join(rng.choice(SYLLABLES[split]) for _ in range(rng.randint(lo, hi)))
+
+
+def _typo(rng: random.Random, word: str) -> str:
+    for _ in range(20):
+        i = rng.randint(0, len(word) - 2)
+        t = word[:i] + word[i + 1] + word[i] + word[i + 2 :]
+        if t != word:
+            return t
+    return word + word[-1]
+
+
 OPS = {"add": ("+", "-"), "sub": ("-", "+"), "mul": ("*", "+")}
 DESCRIPTIONS = [
     "The test for {fn} fails. Fix it.",
@@ -72,8 +79,8 @@ def _test_file(mod: str, fn: str, cases: list[tuple[tuple, object]]) -> str:
 
 def make_task(rng: random.Random, split: str, idx: int, family: str | None = None) -> BugTask:
     family = family or rng.choice(["typo", "operator", "compare"])
-    mod = rng.choice(MODULE_POOLS[split])
-    suffix = rng.choice(SUFFIX_POOLS[split])
+    mod = _word(rng, split)
+    suffix = _word(rng, split)
     lo, hi = (1, 9) if split == "train" else (11, 29)
     if family == "operator":
         kind = rng.choice(list(OPS))
@@ -95,7 +102,8 @@ def make_task(rng: random.Random, split: str, idx: int, family: str | None = Non
         src = f"def {fn}(x, limit):\n    {buggy}\n"
         cases = [((x, limit), eval(f"{x} {good} {limit}"))]
     else:
-        var, typo = rng.choice(VAR_PAIRS[split])
+        var = _word(rng, split, 2, 3)
+        typo = _typo(rng, var)
         fn = f"scale_{suffix}"
         k = rng.randint(lo, hi)
         n = rng.randint(lo, hi)
@@ -108,7 +116,7 @@ def make_task(rng: random.Random, split: str, idx: int, family: str | None = Non
 
 
 def make_tasks(split: str, n: int, seed: int) -> list[BugTask]:
-    if split not in SUFFIX_POOLS:
+    if split not in SYLLABLES:
         raise ValueError("split must be 'train' or 'eval'")
     rng = random.Random(f"{seed}:{split}")
     return [make_task(rng, split, i) for i in range(n)]
@@ -117,8 +125,9 @@ def make_tasks(split: str, n: int, seed: int) -> list[BugTask]:
 def expert_actions(task: BugTask) -> list[dict]:
     """Ground-truth action sequence. Every step's observation comes from real tools when replayed."""
     return [
-        {"thought": "Run the tests to see the failure.", "plan": ["run tests", "read code", "fix bug", "rerun tests"],
-         "tool": "run_command", "args": {"command": task.test_command}},
+        {"thought": "Look at the project files.", "plan": ["list files", "run tests", "read code", "fix bug", "rerun tests"],
+         "tool": "list_dir", "args": {}},
+        {"thought": "Run the tests to see the failure.", "tool": "run_command", "args": {"command": task.test_command}},
         {"thought": f"Read {task.module_file}.", "tool": "read_file", "args": {"path": task.module_file}},
         {"thought": "Fix the bug.", "tool": "edit_file", "args": {"path": task.module_file, "old": task.buggy_line, "new": task.fixed_line}},
         {"thought": "Run the tests again.", "tool": "run_command", "args": {"command": task.test_command}},

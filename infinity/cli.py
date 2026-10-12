@@ -255,7 +255,8 @@ def cmd_sft(args) -> int:
         stop = threading.Event()
         signal.signal(signal.SIGINT, lambda s, f: stop.set())
         print(json.dumps(finetune(args.base, args.data, args.out, steps=args.steps, context=args.context,
-                                  batch_size=args.batch_size, lr=args.lr, stop_flag=stop), indent=2))
+                                  batch_size=args.batch_size, lr=args.lr, stop_flag=stop, lm_mix=args.lm_mix,
+                                  lm_data=args.lm_data, eval_every=args.eval_every), indent=2))
     return 0
 
 
@@ -266,7 +267,8 @@ def cmd_bench(args) -> int:
         for r in BenchStore(args.store).list(args.checkpoint):
             print(f"#{r['id']:<4} {r['suite']:<9} {r['run']} step {r['step']:<6} {json.dumps(r['metrics'])[:160]}")
         return 0
-    run(args.checkpoint, args.suites.split(","), args.store, args.data, args.sft, n_repair=args.n_repair, n_protocol=args.n_protocol)
+    run(args.checkpoint, args.suites.split(","), args.store, args.data, args.sft, n_repair=args.n_repair,
+        n_protocol=args.n_protocol, repair_seed=args.repair_seed)
     return 0
 
 
@@ -383,6 +385,9 @@ def build_parser() -> argparse.ArgumentParser:
     sf.add_argument("--steps", type=int, default=1200)
     sf.add_argument("--batch-size", type=int, default=16)
     sf.add_argument("--lr", type=float, default=1e-3)
+    sf.add_argument("--lm-mix", type=float, default=0.25, help="fraction of steps that also train on pretraining text (limits forgetting)")
+    sf.add_argument("--lm-data", default="runs/data")
+    sf.add_argument("--eval-every", type=int, default=250)
     sf.set_defaults(fn=cmd_sft)
 
     be = sub.add_parser("bench", help="run / list recorded benchmarks")
@@ -394,6 +399,7 @@ def build_parser() -> argparse.ArgumentParser:
     be.add_argument("--sft", default="runs/sft")
     be.add_argument("--n-repair", type=int, default=30)
     be.add_argument("--n-protocol", type=int, default=200)
+    be.add_argument("--repair-seed", type=int, default=1337, help="1337 = reported test set; use another seed for checkpoint selection")
     be.set_defaults(fn=cmd_bench)
 
     mo = sub.add_parser("model", help="promote a benchmarked checkpoint (explicit, recorded)")

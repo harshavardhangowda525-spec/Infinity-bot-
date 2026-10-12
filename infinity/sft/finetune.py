@@ -87,7 +87,7 @@ def eval_loss(model, data: SFTData, batch_size: int, device: str, limit: int = 4
 
 def finetune(base: str, data_dir: str | Path, out_dir: str | Path, steps: int = 1200, context: int = 512, batch_size: int = 16,
              lr: float = 1e-3, warmup: int = 50, seed: int = 1337, eval_every: int = 200, log=print, stop_flag=None,
-             save_every_eval: bool = True) -> dict:
+             save_every_eval: bool = True, lm_mix: float = 0.0, lm_data: str | Path | None = None) -> dict:
     data_dir, out_dir = Path(data_dir), Path(out_dir)
     if (out_dir / "checkpoints").exists() and any((out_dir / "checkpoints").glob("step_*")):
         raise FileExistsError(f"{out_dir} already has checkpoints; choose a new output directory (runs are never overwritten)")
@@ -117,6 +117,16 @@ def finetune(base: str, data_dir: str | Path, out_dir: str | Path, steps: int = 
         f"examples {len(train.items)} (dropped {train.dropped}) device {device}")
     before = eval_loss(model, evald, batch_size, device)
     log(f"eval loss before: {before:.4f}")
+    lm_ds = None
+    if lm_mix > 0:
+        from ..core.data import TokenDataset
+
+        prepared = json.loads((Path(lm_data) / "prepared.json").read_text())
+        if prepared["tokenizer"]["fingerprint"] != tok.fingerprint():
+            raise ValueError("pretraining data uses a different tokenizer")
+        lm_ds = TokenDataset(Path(lm_data) / "train.bin", prepared["splits"]["train"]["dtype"], min(256, context))
+        lm_gen = torch.Generator().manual_seed(seed)
+        lineage["lm_mix"] = lm_mix
     t0 = time.time()
     model.train()
     last: dict = {}
@@ -131,6 +141,10 @@ def finetune(base: str, data_dir: str | Path, out_dir: str | Path, steps: int = 
         for g in opt.param_groups:
             g["lr"] = lr_at(step, tc)
         _, loss = model(x.to(device), y.to(device))
+        if lm_ds is not None and rng.random() < lm_mix:
+            lx, ly = lm_ds.batch(batch_size, lm_gen)
+            _, lm_loss = model(lx.to(device), ly.to(device))
+            loss = loss + lm_loss  # rehearsal on pretraining text limits catastrophic forgetting
         if not math.isfinite(loss.item()):
             raise FloatingPointError(f"non-finite loss at step {step}")
         opt.zero_grad(set_to_none=True)

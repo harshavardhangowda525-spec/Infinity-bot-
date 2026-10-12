@@ -95,7 +95,7 @@ def generate(out_dir: str | Path, tokenizer, context_tokens: int, n_train: int, 
                     if (i + 1) % 100 == 0:
                         log(f"  {split}: {i + 1}/{n} tasks")
             (out / f"{split}_tasks.json").write_text(json.dumps([t.__dict__ for t in tasks]))
-            summary["splits"][split] = {"tasks": n, "kept": kept, "rejected": rejected, "examples": kept * 5,
+            summary["splits"][split] = {"tasks": n, "kept": kept, "rejected": rejected, "examples": kept * len(expert_actions(tasks[0])),
                                         "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
     summary["tokenizer_fingerprint"] = tokenizer.fingerprint()
     (out / "sft_manifest.json").write_text(json.dumps(summary, indent=2))
