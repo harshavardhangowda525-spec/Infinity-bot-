@@ -12,9 +12,10 @@ repository. No pretrained weights and no external AI APIs are used.
 > prototype**. It produces code-flavoured text but **cannot yet drive the agent**:
 > it does not follow the action protocol, so the runtime reports such tasks as
 > `blocked` instead of pretending. Making the model useful for agent work
-> needs far more data and compute (see `docs/FEASIBILITY.md`). The web
-> dashboard, COOK mode, subscriptions and admin center are later increments;
-> see `docs/FEATURES.md`.
+> needs far more data and compute (see `docs/FEASIBILITY.md`). The
+> **INFINITY STUDIO** dashboard (3D infinity core, command dock, floating
+> workspace panels) runs on top of the real agent. Accounts, subscriptions,
+> COOK gating and the admin center are later increments; see `docs/FEATURES.md`.
 
 ## Layout
 
@@ -23,7 +24,9 @@ infinity/
   core/        tokenizer.py  model.py  trainer.py  inference.py  checkpoint.py  data.py  config.py
   agent/       loop.py (brain)  protocol.py  permissions.py  memory.py  checkpoints.py  redact.py
                models/ (adapter interface)   tools/ (fs, shell, git)
+  server/      app.py (FastAPI, local only)  runtime.py
   audit.py     cli.py
+studio/        INFINITY STUDIO — React + TypeScript + Tailwind + Framer Motion + React Three Fiber
 configs/       hyper-5.5-tiny.json  hyper-5.5-small.json
 data/          manifest.json (licensed sources)  PROVENANCE.md  corpus/
 docs/          ARCHITECTURE.md  FEASIBILITY.md  FEATURES.md  PERMISSIONS.md  TROUBLESHOOTING.md
@@ -71,10 +74,29 @@ infinity agent --workspace ~/code/myproject --model neural:runs/hyper-5.5-tiny \
 `--model scripted:file.json` replays a fixed list of actions. It is a test
 double for exercising the runtime, and reports itself as such.
 
+## INFINITY STUDIO (dashboard)
+
+```bash
+pip install fastapi uvicorn websockets          # backend extras (or: pip install -e ".[studio]")
+cd studio && npm install && npm run build && cd ..
+infinity studio --workspace ~/code/myproject --permission ask
+# open http://127.0.0.1:8765
+```
+
+- The server binds to **127.0.0.1 only**, rejects foreign Host and Origin headers,
+  and requires a per-launch session token for every action.
+- The model pill, connection indicator, core animation, task panel, execution
+  stream and change review all come from the backend's real state and events.
+- Approvals for edits and risky commands appear in **Change review**, with the diff.
+  Unanswered approvals are rejected automatically after 5 minutes.
+- Frontend development: run `npm run dev` in `studio/` (Vite proxies `/api` to port 8765).
+- Shortcuts: Enter to send · Shift+Enter for a new line · Ctrl+O project · Ctrl+. workspace.
+
 ## Tests
 
 ```bash
-pytest
+pytest                      # Python: tokenizer, model, training, permissions, tools, agent, server
+cd studio && npm test       # UI: core-state mapping, command dock, execution stream
 ```
 
 ## Docs

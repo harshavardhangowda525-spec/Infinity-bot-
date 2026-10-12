@@ -280,6 +280,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "studio":  # forward all options to the studio's own parser
+        from .server.app import main as studio_main
+
+        return studio_main(argv[1:])
     args = build_parser().parse_args(argv)
     return args.fn(args)
 

@@ -86,5 +86,5 @@ actions as `blocked` instead of faking success.
 | 6 | Instruction / tool-use fine-tuning | not started (needs a dataset and GPU) |
 | 7 | INFINITY BRAIN, tools, memory | done, tested |
 | 8 | INFINITY CODER repository workflows (indexing, symbol search) | partial (search and read tools; no index yet) |
-| 9 | INFINITY STUDIO dashboard (infinity core, Normal/COOK, subscriptions, admin) | not started |
+| 9 | INFINITY STUDIO dashboard | home screen and workspace done (see `FEATURES.md`); Normal/COOK, subscriptions and admin not started |
 | 10 | Integration, docs, optimisation | ongoing |

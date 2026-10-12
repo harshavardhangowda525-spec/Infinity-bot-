@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg: #04060b;
+  --glass: rgba(14, 19, 30, 0.58);
+  --glass-strong: rgba(14, 19, 30, 0.78);
+  --line: rgba(148, 197, 255, 0.12);
+  --line-strong: rgba(148, 197, 255, 0.22);
+  --text: #e6edf7;
+  --muted: #8a97ab;
+  --cyan: #5ee7ff;
+  --blue: #3b82f6;
+  --violet: #8b7cf6;
+  --amber: #f5b84b;
+  --red: #ff6b6b;
+  --green: #5cf2b5;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Atmospheric depth: a very faint radial wash, no rainbow gradients. */
+.atmosphere {
+  background:
+    radial-gradient(60% 50% at 50% 42%, rgba(59, 130, 246, 0.09), transparent 70%),
+    radial-gradient(40% 35% at 62% 55%, rgba(139, 124, 246, 0.06), transparent 70%),
+    var(--bg);
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.glass-strong {
+  background: var(--glass-strong);
+  border: 1px solid var(--line-strong);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.focus-ring:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 197, 255, 0.25) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: rgba(148, 197, 255, 0.25);
+  border-radius: 3px;
+}
+
+/* SVG fallback core (no WebGL) */
+@keyframes infinity-flow {
+  to {
+    stroke-dashoffset: -400;
+  }
+}
+.fallback-flow {
+  stroke-dasharray: 60 340;
+  animation: infinity-flow 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fallback-flow {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* highlight.js theme tuned to the palette */
+.hljs { color: #d6e2f0; background: transparent; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in { color: #7cc4ff; }
+.hljs-string, .hljs-attr { color: #9ff3c9; }
+.hljs-number, .hljs-literal { color: #f5c97b; }
+.hljs-comment { color: #5f6f86; font-style: italic; }
+.hljs-title, .hljs-function .hljs-title, .hljs-title.function_ { color: #b9a7ff; }
+.hljs-type, .hljs-class .hljs-title { color: #5ee7ff; }
+.hljs-meta, .hljs-tag { color: #8a97ab; }
+.hljs-variable, .hljs-params { color: #e6edf7; }
+
+/* Popovers sit above the hologram: keep them readable. */
+.glass-strong.popover {
+  background: rgba(8, 11, 18, 0.92);
+}
+
+/* State-tinted backlight behind the core (CSS only, no extra GPU work). */
+.core-halo {
+  background: radial-gradient(closest-side, var(--halo, rgba(94, 231, 255, 0.16)), transparent 72%);
+  transition: background 600ms ease, opacity 600ms ease;
+}
