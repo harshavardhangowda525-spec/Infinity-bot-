@@ -8,6 +8,7 @@
     infinity agent         --workspace PATH --model neural:runs/hyper-5.5-tiny --mode code --task "..."
     infinity rollback      --workspace PATH --session ID
     infinity memory        show|export|delete-session|delete-note|wipe|trust|untrust ...
+    infinity studio        [--workspace PATH] [--permission ask] [--port 8765]
 """
 
 from __future__ import annotations
@@ -200,6 +201,12 @@ def cmd_memory(args) -> int:
     return 0
 
 
+def cmd_studio(args) -> int:
+    from .server.app import main as studio_main
+
+    return studio_main(args.rest)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="infinity", description="INFINITY BOT · INFINITY HYPER 5.5")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -266,6 +273,9 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("value", nargs="?", default="")
     m.add_argument("--db", default=None)
     m.set_defaults(fn=cmd_memory)
+    st = sub.add_parser("studio", help="start the INFINITY STUDIO dashboard (local only)", add_help=False)
+    st.add_argument("rest", nargs=argparse.REMAINDER)
+    st.set_defaults(fn=cmd_studio)
     return p
 
 

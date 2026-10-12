@@ -306,18 +306,20 @@ class Agent:
             tool = self.registry.get(action.tool)
             if tool is not None and self.mode in READ_ONLY_MODES and not tool.read_only and action.tool != "run_command":
                 result_text = f"[{action.tool}] error\npermission denied: {self.mode.value} mode does not modify files"
-                ok, dur = False, 0
+                ok, dur, extra = False, 0, {}
             else:
                 self._emit(type="state", state=_state_for(action.tool, action.args), step=step,
                            tool=action.tool, args=_safe_args(action.args))
                 res = self.registry.execute(action.tool, action.args, ctx)
                 result_text = res.for_model(self.limits.observation_chars)
                 ok, dur = res.ok, res.duration_ms
+                extra = {k: res.data[k] for k in ("diff", "path", "exit_code", "status") if k in res.data}
                 if not res.ok:
                     errors.append(result_text[:500])
             rec = StepRecord(step, action.thought, action.tool, _safe_args(action.args), ok, result_text[:2000], dur)
             steps.append(rec)
-            self._emit(type="tool_result", step=step, tool=action.tool, ok=ok, observation=result_text[:2000])
+            self._emit(type="tool_result", step=step, tool=action.tool, ok=ok, observation=result_text[:2000],
+                       **{k: (redact(v) if isinstance(v, str) else v) for k, v in extra.items()})
             if self.memory is not None:
                 self.memory.record_tool_call(task_id, step, action.tool, action.args, ok, result_text, dur)
             history += [Message("assistant", json.dumps({"thought": action.thought, "tool": action.tool, "args": action.args})[:4000]),
