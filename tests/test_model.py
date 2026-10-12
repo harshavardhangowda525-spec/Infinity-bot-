@@ -20,8 +20,10 @@ def make_model(seed=0, cfg=SMALL):
 
 def test_forward_shapes_and_initial_loss():
     m = make_model()
-    x = torch.randint(0, SMALL.vocab_size, (2, 16))
-    logits, loss = m(x, x)
+    g = torch.Generator().manual_seed(1)
+    x = torch.randint(0, SMALL.vocab_size, (2, 16), generator=g)
+    y = torch.randint(0, SMALL.vocab_size, (2, 16), generator=g)
+    logits, loss = m(x, y)
     assert logits.shape == (2, 16, SMALL.vocab_size)
     # Freshly initialized model should be close to uniform: loss ~ ln(V).
     assert abs(loss.item() - math.log(SMALL.vocab_size)) < 0.5
@@ -99,10 +101,16 @@ def _tok():
     return BPETokenizer.train(["hello world, hello agent\n"] * 10, vocab_size=SMALL.vocab_size)
 
 
+def _run_for(tok):
+    from dataclasses import replace
+
+    return RunConfig(name="t", model=replace(SMALL, vocab_size=tok.vocab_size))
+
+
 def test_checkpoint_save_load_verify(tmp_path):
     tok = _tok()
-    m = make_model()
-    run = RunConfig(name="t", model=SMALL)
+    run = _run_for(tok)
+    m = make_model(cfg=run.model)
     path = save_checkpoint(tmp_path, 5, m, None, run, tok, {"loss": 1.0})
     assert (tmp_path / "LATEST").read_text() == path.name
     m2, tok2, run2, tstate, manifest, _ = load_checkpoint(tmp_path)
@@ -115,7 +123,7 @@ def test_checkpoint_save_load_verify(tmp_path):
 
 
 def test_checkpoint_corruption_detected(tmp_path):
-    path = save_checkpoint(tmp_path, 1, make_model(), None, RunConfig(name="t", model=SMALL), _tok(), {})
+    path = save_checkpoint(tmp_path, 1, make_model(), None, _run_for(_tok()), _tok(), {})
     with open(path / "model.pt", "ab") as f:
         f.write(b"tamper")
     with pytest.raises(CheckpointError):
@@ -123,7 +131,7 @@ def test_checkpoint_corruption_detected(tmp_path):
 
 
 def test_incomplete_checkpoint_rejected(tmp_path):
-    path = save_checkpoint(tmp_path, 1, make_model(), None, RunConfig(name="t", model=SMALL), _tok(), {})
+    path = save_checkpoint(tmp_path, 1, make_model(), None, _run_for(_tok()), _tok(), {})
     (path / "manifest.json").unlink()
     with pytest.raises(CheckpointError):
         verify_checkpoint(path)

@@ -148,3 +148,9 @@ def test_env_values_redacted_and_scrubbed(monkeypatch):
     assert "tok-1234567890abcdef" not in redact("value is tok-1234567890abcdef")
     env = scrubbed_env()
     assert "MY_SERVICE_TOKEN" not in env and "PATH" in env
+
+
+def test_interpreter_path_outside_workspace_is_not_an_argument(ws):
+    assert classify_command("/usr/bin/python3 -m pytest -q", ws).risk == Risk.CHECK
+    assert classify_command("ls /tmp/elsewhere", ws).risk == Risk.HIGH  # no /tmp exemption
+    assert classify_command("echo hi > /dev/null", ws).risk == Risk.MEDIUM

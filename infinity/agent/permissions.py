@@ -199,7 +199,9 @@ def classify_command(command: str, workspace: Workspace | None = None) -> Comman
             reasons.append("uses shell syntax")
 
     if workspace is not None:
-        for tok in argv:
+        # argv[0] is the program (an interpreter may legitimately live outside
+        # the workspace); only its arguments are checked for out-of-scope paths.
+        for tok in argv[1:]:
             if tok.startswith("-"):
                 tok = tok.split("=", 1)[-1] if "=" in tok else ""
             if not tok:
@@ -208,7 +210,7 @@ def classify_command(command: str, workspace: Workspace | None = None) -> Comman
                 try:
                     workspace.resolve(tok)
                 except PathError:
-                    if not tok.startswith(("/dev/null", "/tmp")):
+                    if tok != "/dev/null":
                         reasons.append(f"argument outside workspace: {tok}")
                         if order.index(worst) < order.index(Risk.HIGH):
                             worst = Risk.HIGH
