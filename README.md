@@ -61,6 +61,13 @@ infinity generate --checkpoint runs/hyper-5.5-tiny --prompt "def read_config(pat
 Training writes `runs/<name>/train_log.jsonl`. It contains only measured
 values (loss, validation loss, learning rate, gradient norm, elapsed time).
 
+## Bigger models (100M → 1B → 7B)
+
+- `configs/hyper-5.5-small.json` (97.5M), `hyper-5.5-1b.json` (1.03B), `hyper-5.5-7b.json` (7.11B, grouped-query attention).
+- `infinity size --config configs/hyper-5.5-7b.json` reports memory, compute and GPU-hours.
+- **Free first step:** `notebooks/kaggle_train_100m.ipynb` trains the 100M model on Kaggle's GPU.
+- **Multi-GPU:** `torchrun ... -m infinity.core.dist_train` (DDP / FSDP2). See `docs/SCALING.md`.
+
 ## Make it smarter (tool-use fine-tuning and benchmarks)
 
 ```bash
@@ -127,4 +134,5 @@ cd studio && npm test       # UI: core-state mapping, command dock, execution st
 - `docs/FEASIBILITY.md`: hardware report, model config, data strategy, compute budget, plan
 - `docs/FEATURES.md`: implemented / partial / not implemented
 - `docs/TRAINING_REPORT.md`, `docs/FINETUNE_REPORT.md`: measured training and fine-tuning results
+- `docs/SCALING.md`: 100M / 1B / 7B training guide
 - `docs/PERMISSIONS.md`, `docs/TROUBLESHOOTING.md`

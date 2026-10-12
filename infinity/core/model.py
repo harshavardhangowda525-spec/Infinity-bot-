@@ -65,8 +65,10 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
         self.n_heads = cfg.n_heads
+        self.n_kv = cfg.kv_heads
         self.head_dim = cfg.head_dim
-        self.qkv = nn.Linear(cfg.d_model, 3 * cfg.d_model, bias=False)
+        # Fused projection. With n_kv == n_heads this is exactly the original 3*d_model layout.
+        self.qkv = nn.Linear(cfg.d_model, (cfg.n_heads + 2 * self.n_kv) * cfg.head_dim, bias=False)
         self.proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
         self.dropout = cfg.dropout
         self.use_fused_attention = True
@@ -79,10 +81,11 @@ class CausalSelfAttention(nn.Module):
         cache: LayerCache | None = None,
     ) -> torch.Tensor:
         B, T, C = x.shape
-        q, k, v = self.qkv(x).split(C, dim=2)
-        q = q.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
-        k = k.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
-        v = v.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        hd = self.head_dim
+        q, k, v = self.qkv(x).split([self.n_heads * hd, self.n_kv * hd, self.n_kv * hd], dim=2)
+        q = q.view(B, T, self.n_heads, hd).transpose(1, 2)
+        k = k.view(B, T, self.n_kv, hd).transpose(1, 2)
+        v = v.view(B, T, self.n_kv, hd).transpose(1, 2)
         q = apply_rope(q, cos, sin)
         k = apply_rope(k, cos, sin)
 
@@ -94,6 +97,10 @@ class CausalSelfAttention(nn.Module):
                 v = torch.cat([cache.v, v], dim=2)
             cache.k, cache.v = k, v
 
+        if self.n_kv != self.n_heads:  # grouped-query attention: share each K/V head across a group of query heads
+            rep = self.n_heads // self.n_kv
+            k = k.repeat_interleave(rep, dim=1)
+            v = v.repeat_interleave(rep, dim=1)
         S = k.size(2)
         drop = self.dropout if self.training else 0.0
         if self.use_fused_attention:
@@ -141,8 +148,16 @@ class Block(nn.Module):
         self.norm2 = RMSNorm(cfg.d_model, cfg.norm_eps)
         self.ffn = SwiGLU(cfg)
         self.resid_dropout = nn.Dropout(cfg.dropout)
+        self.grad_checkpoint = cfg.grad_checkpoint
 
     def forward(self, x, cos, sin, cache=None):
+        if self.grad_checkpoint and self.training and cache is None and torch.is_grad_enabled():
+            from torch.utils.checkpoint import checkpoint
+
+            return checkpoint(self._forward, x, cos, sin, None, use_reentrant=False)
+        return self._forward(x, cos, sin, cache)
+
+    def _forward(self, x, cos, sin, cache):
         x = x + self.resid_dropout(self.attn(self.norm1(x), cos, sin, cache))
         x = x + self.ffn(self.norm2(x))
         return x

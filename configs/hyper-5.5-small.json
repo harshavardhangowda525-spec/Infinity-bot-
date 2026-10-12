@@ -1,5 +1,8 @@
 {
-  "identity": {"family": "INFINITY HYPER", "version": "5.5"},
+  "identity": {
+    "family": "INFINITY HYPER",
+    "version": "5.5"
+  },
   "name": "hyper-5.5-small",
   "model": {
     "vocab_size": 16384,
@@ -30,7 +33,9 @@
     "seed": 1337,
     "precision": "bf16",
     "device": "auto",
-    "num_threads": 0
+    "num_threads": 0,
+    "strategy": "single",
+    "time_budget_hours": 11.0
   },
   "data_manifest": "data/manifest.json",
   "tokenizer_vocab_size": 16384,

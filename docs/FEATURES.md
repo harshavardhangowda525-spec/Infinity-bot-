@@ -19,6 +19,12 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Benchmark suite: lm perplexity, protocol validity, live repair; recorded with checkpoint hash | ✅ | `infinity bench run/list`; Intelligence view |
 | Explicit model promotion gated on recorded benchmarks | ✅ | `infinity model promote` (nothing promoted yet) |
 | Hardware audit and model-size recommendation | ✅ | `infinity audit` |
+| 100M / 1B / 7B configs (GQA, gradient checkpointing, exact parameter formula) | ✅ | 7B = 7,110,660,096 parameters; not trained (needs a GPU cluster) |
+| Sizing tool (memory, FLOPs, GPU-hours, optional cost) | ✅ | `infinity size` |
+| Large-corpus pipeline: streaming clean/dedupe, hash splits, sampled tokenizer, parallel sharded tokenisation | ✅ | `infinity data prepare-large` |
+| Licence-filtered Hugging Face Parquet fetcher with provenance | 🟡 | filtering tested locally; download untested here (huggingface.co blocked) |
+| Multi-GPU training: DDP + FSDP2, bf16/fp16, resume across world sizes, time budget | 🟡 | verified with 2 CPU processes (gloo); NCCL/GPU runs untested here |
+| Kaggle notebook for the 100M model | ✅ | smoke-tested cell by cell; real Kaggle GPU run not done |
 
 ## INFINITY BRAIN (agent runtime)
 

@@ -142,3 +142,47 @@ def test_config_rejects_unknown_keys(tmp_path):
     p.write_text(json.dumps({"name": "x", "model": {"d_model": 32, "n_heads": 4, "bogus": 1}}))
     with pytest.raises(ValueError):
         RunConfig.load(p)
+
+
+def test_parameter_count_formula_matches_model():
+    for cfg in [SMALL, ModelConfig(vocab_size=300, context_length=32, d_model=64, n_layers=2, n_heads=8, d_ff=96, n_kv_heads=2),
+                ModelConfig(vocab_size=300, context_length=32, d_model=32, n_layers=1, n_heads=4, d_ff=64, tie_embeddings=False)]:
+        assert cfg.parameter_count() == InfinityNeuralCore(cfg).num_parameters()
+
+
+def test_grouped_query_attention_and_kv_cache():
+    cfg = ModelConfig(vocab_size=300, context_length=32, d_model=64, n_layers=2, n_heads=8, d_ff=96, n_kv_heads=2)
+    m = make_model(cfg=cfg).eval()
+    x = torch.randint(0, 300, (1, 10))
+    with torch.no_grad():
+        full, _ = m(x)
+        caches = m.new_caches()
+        m(x[:, :6], caches=caches)
+        assert caches[0].k.shape[1] == 2  # cache stores only the 2 KV heads (memory saving)
+        for t in range(6, 10):
+            out, _ = m(x[:, t : t + 1], caches=caches)
+            assert torch.allclose(full[:, t], out[:, -1], atol=1e-4)
+    with pytest.raises(ValueError):
+        ModelConfig(d_model=64, n_heads=8, n_kv_heads=3)
+
+
+def test_gradient_checkpointing_gives_same_gradients():
+    from dataclasses import replace
+
+    x = torch.randint(0, SMALL.vocab_size, (2, 16))
+    grads = []
+    for gc in (False, True):
+        m = make_model(cfg=replace(SMALL, grad_checkpoint=gc))
+        _, loss = m(x, x)
+        loss.backward()
+        grads.append(m.embed.weight.grad.clone())
+    assert torch.allclose(grads[0], grads[1], atol=1e-5)
+
+
+def test_large_configs_are_defined_without_allocating(tmp_path):
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "configs"
+    p1b = RunConfig.load(root / "hyper-5.5-1b.json").model.parameter_count()
+    p7b = RunConfig.load(root / "hyper-5.5-7b.json").model.parameter_count()
+    assert 0.9e9 < p1b < 1.3e9 and 6.0e9 < p7b < 7.5e9

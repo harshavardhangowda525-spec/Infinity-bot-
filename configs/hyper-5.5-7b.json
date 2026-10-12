@@ -1,0 +1,45 @@
+{
+  "identity": {
+    "family": "INFINITY HYPER",
+    "version": "5.5"
+  },
+  "name": "hyper-5.5-7b",
+  "model": {
+    "vocab_size": 32000,
+    "context_length": 4096,
+    "d_model": 4096,
+    "n_layers": 32,
+    "n_heads": 32,
+    "n_kv_heads": 8,
+    "d_ff": 14336,
+    "dropout": 0.0,
+    "rope_theta": 500000.0,
+    "norm_eps": 1e-05,
+    "tie_embeddings": true,
+    "grad_checkpoint": true
+  },
+  "train": {
+    "batch_size": 4,
+    "grad_accum_steps": 32,
+    "max_steps": 250000,
+    "learning_rate": 0.0003,
+    "min_lr_ratio": 0.1,
+    "warmup_steps": 2000,
+    "weight_decay": 0.1,
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "grad_clip": 1.0,
+    "eval_interval": 2000,
+    "eval_batches": 50,
+    "checkpoint_interval": 2000,
+    "seed": 1337,
+    "precision": "bf16",
+    "device": "auto",
+    "num_threads": 0,
+    "strategy": "fsdp",
+    "time_budget_hours": 0.0
+  },
+  "data_manifest": "data/manifest.json",
+  "tokenizer_vocab_size": 32000,
+  "output_dir": "runs/hyper-5.5-7b"
+}

@@ -83,16 +83,23 @@ def bench_lm(model: NeuralCoreModel, data_dir: Path, windows: int = 64, seed: in
     prepared = json.loads((data_dir / "prepared.json").read_text())
     if prepared["tokenizer"]["fingerprint"] != eng.tokenizer.fingerprint():
         raise ValueError("test split was tokenized with a different tokenizer")
-    data = np.memmap(data_dir / "test.bin", dtype=np.dtype(prepared["splits"]["test"]["dtype"]), mode="r")
     ctx = min(256, eng.run_cfg.model.context_length)
-    g = np.random.default_rng(seed)
-    starts = g.integers(0, len(data) - ctx - 1, size=windows)
     losses = []
-    for s in starts:
-        x = torch.from_numpy(np.asarray(data[s : s + ctx], dtype=np.int64))[None]
-        y = torch.from_numpy(np.asarray(data[s + 1 : s + 1 + ctx], dtype=np.int64))[None]
-        _, loss = eng.model(x, y)
-        losses.append(loss.item())
+    if prepared.get("format") == "sharded-v1":
+        from ..core.data_large import ShardedTokenDataset
+
+        ds = ShardedTokenDataset(data_dir, prepared["splits"]["test"], ctx)
+        gen = torch.Generator().manual_seed(seed)
+        for _ in range(windows):
+            x, y = ds.batch(1, gen)
+            losses.append(eng.model(x, y)[1].item())
+    else:
+        data = np.memmap(data_dir / "test.bin", dtype=np.dtype(prepared["splits"]["test"]["dtype"]), mode="r")
+        g = np.random.default_rng(seed)
+        for s in g.integers(0, len(data) - ctx - 1, size=windows):
+            x = torch.from_numpy(np.asarray(data[s : s + ctx], dtype=np.int64))[None]
+            y = torch.from_numpy(np.asarray(data[s + 1 : s + 1 + ctx], dtype=np.int64))[None]
+            losses.append(eng.model(x, y)[1].item())
     mean = float(np.mean(losses))
     return {"test_loss": round(mean, 4), "perplexity": round(math.exp(mean), 2)}, {"windows": windows, "window_tokens": ctx, "seed": seed}
 

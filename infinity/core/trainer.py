@@ -26,6 +26,31 @@ from .model import InfinityNeuralCore
 from .tokenizer import BPETokenizer
 
 
+def load_datasets(data_dir: Path, prepared: dict, ctx: int):
+    """Single-file (small corpora) or sharded (large corpora) token data."""
+    if prepared.get("format") == "sharded-v1":
+        from .data_large import ShardedTokenDataset
+
+        return (ShardedTokenDataset(data_dir, prepared["splits"]["train"], ctx),
+                ShardedTokenDataset(data_dir, prepared["splits"]["val"], ctx))
+    return (TokenDataset(data_dir / "train.bin", prepared["splits"]["train"]["dtype"], ctx),
+            TokenDataset(data_dir / "val.bin", prepared["splits"]["val"]["dtype"], ctx))
+
+
+def make_autocast(precision: str, device: str):
+    """fp32 | bf16 (Ampere+/CPU) | fp16 (T4/P100/V100; needs loss scaling)."""
+    dev = device.split(":")[0]
+    if precision == "bf16":
+        return lambda: torch.autocast(device_type=dev, dtype=torch.bfloat16)
+    if precision == "fp16":
+        if dev != "cuda":
+            raise ValueError("fp16 training needs a CUDA GPU; use bf16 or fp32 on CPU")
+        return lambda: torch.autocast(device_type="cuda", dtype=torch.float16)
+    if precision != "fp32":
+        raise ValueError(f"unknown precision {precision!r}")
+    return nullcontext
+
+
 def pick_device(name: str) -> str:
     if name != "auto":
         return name
@@ -89,8 +114,7 @@ class Trainer:
             self.log(f"model.vocab_size {run_cfg.model.vocab_size} -> {self.tokenizer.vocab_size} (from tokenizer)")
             run_cfg.model.vocab_size = self.tokenizer.vocab_size
         ctx = run_cfg.model.context_length
-        self.train_ds = TokenDataset(self.data_dir / "train.bin", prepared["splits"]["train"]["dtype"], ctx)
-        self.val_ds = TokenDataset(self.data_dir / "val.bin", prepared["splits"]["val"]["dtype"], ctx)
+        self.train_ds, self.val_ds = load_datasets(self.data_dir, prepared, ctx)
         self.prepared = prepared
 
     def train(self, resume: bool = True, max_steps: int | None = None, stop_flag=None) -> dict:
@@ -120,8 +144,9 @@ class Trainer:
             start_step = int(tstate["step"])
             self.log(f"resumed from {path} (step {start_step})")
 
-        use_bf16 = tc.precision == "bf16"
-        autocast = (lambda: torch.autocast(device_type=device.split(":")[0], dtype=torch.bfloat16)) if use_bf16 else nullcontext
+        autocast = make_autocast(tc.precision, device)
+        scaler = torch.amp.GradScaler("cuda", enabled=tc.precision == "fp16")
+        deadline = time.time() + tc.time_budget_hours * 3600 if tc.time_budget_hours else None
 
         self.out_dir.mkdir(parents=True, exist_ok=True)
         log_path = self.out_dir / "train_log.jsonl"
@@ -140,8 +165,8 @@ class Trainer:
         step = start_step
         interrupted = False
         while step < tc.max_steps:
-            if stop_flag is not None and stop_flag.is_set():
-                interrupted = True
+            if (stop_flag is not None and stop_flag.is_set()) or (deadline is not None and time.time() > deadline):
+                interrupted = True  # checkpoint below; rerunning resumes from here
                 break
             lr = lr_at(step, tc)
             for g in optimizer.param_groups:
@@ -152,12 +177,14 @@ class Trainer:
                 x, y = self.train_ds.batch(tc.batch_size, gen)
                 with autocast():
                     _, loss = model(x.to(device), y.to(device))
-                (loss / tc.grad_accum_steps).backward()
+                scaler.scale(loss / tc.grad_accum_steps).backward()
                 loss_acc += loss.item() / tc.grad_accum_steps
             if not math.isfinite(loss_acc):
                 raise FloatingPointError(f"non-finite loss at step {step}: {loss_acc}")
+            scaler.unscale_(optimizer)
             gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), tc.grad_clip).item()
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             step += 1
             dt = time.time() - t0
             rec = {"step": step, "loss": round(loss_acc, 5), "lr": lr, "grad_norm": round(gnorm, 4),

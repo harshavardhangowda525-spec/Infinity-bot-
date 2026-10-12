@@ -3,6 +3,9 @@
     infinity audit
     infinity data prepare  [--manifest data/manifest.json] [--out runs/data] [--vocab 4096]
     infinity train         --config configs/hyper-5.5-tiny.json [--data runs/data] [--steps N] [--no-resume]
+    torchrun --nproc_per_node 8 -m infinity.core.dist_train --config configs/hyper-5.5-7b.json --data runs/data-large
+    infinity data fetch-hf / prepare-large                    (large licensed corpora, sharded)
+    infinity size --config configs/hyper-5.5-7b.json         (parameters, memory, GPU-hours)
     infinity generate      --checkpoint runs/hyper-5.5-tiny --prompt "def "
     infinity checkpoints   --run runs/hyper-5.5-tiny
     infinity agent         --workspace PATH --model neural:runs/hyper-5.5-tiny --mode code --task "..."
@@ -37,6 +40,25 @@ def cmd_data_prepare(args) -> int:
 
     summary = prepare(args.manifest, args.out, args.vocab, args.seed)
     print(json.dumps({k: summary[k] for k in ("tokenizer", "cleaning", "splits")}, indent=2))
+    return 0
+
+
+def cmd_data_large(args) -> int:
+    from .core.data_large import prepare_large
+
+    s = prepare_large(args.manifest, args.out, args.vocab, args.seed, shard_bytes=args.shard_mb * 1_000_000,
+                      tokenizer_sample_bytes=args.sample_mb * 1_000_000, workers=args.workers)
+    print(json.dumps({"tokenizer": s["tokenizer"], "cleaning": s["cleaning"],
+                      "splits": {k: {"shards": len(v["shards"]), "tokens": v["tokens"]} for k, v in s["splits"].items()}}, indent=2))
+    return 0
+
+
+def cmd_data_fetch(args) -> int:
+    from .core.data_large import fetch_hf_parquet
+
+    langs = [l for l in args.languages.split(",") if l] or None
+    print(json.dumps(fetch_hf_parquet(args.dataset, args.out, args.licenses.split(","), langs, int(args.max_mb * 1_000_000),
+                                      args.text_field, args.license_field, args.language_field), indent=2))
     return 0
 
 
@@ -300,6 +322,16 @@ def cmd_model(args) -> int:
     return 0
 
 
+def cmd_size(args) -> int:
+    from .core.config import RunConfig
+    from .sizing import plan, render
+
+    cfg = RunConfig.load(args.config)
+    p = plan(cfg, args.tokens)
+    print(json.dumps(p.to_dict(), indent=2) if args.json else render(cfg, p, args.price_per_gpu_hour, args.currency))
+    return 0
+
+
 def cmd_studio(args) -> int:
     from .server.app import main as studio_main
 
@@ -320,6 +352,25 @@ def build_parser() -> argparse.ArgumentParser:
     dp.add_argument("--vocab", type=int, default=4096)
     dp.add_argument("--seed", type=int, default=1337)
     dp.set_defaults(fn=cmd_data_prepare)
+    dl = dsub.add_parser("prepare-large", help="streaming, sharded, parallel preparation for large corpora")
+    dl.add_argument("--manifest", default="data/manifest.json")
+    dl.add_argument("--out", default="runs/data-large")
+    dl.add_argument("--vocab", type=int, default=16384)
+    dl.add_argument("--seed", type=int, default=1337)
+    dl.add_argument("--shard-mb", type=int, default=64)
+    dl.add_argument("--sample-mb", type=int, default=50, help="tokenizer is trained on this much train text")
+    dl.add_argument("--workers", type=int, default=0)
+    dl.set_defaults(fn=cmd_data_large)
+    df = dsub.add_parser("fetch-hf", help="download a public HF dataset (Parquet), keeping only permissive licences")
+    df.add_argument("--dataset", default="codeparrot/github-code-clean")
+    df.add_argument("--out", default="data/hf/github-code")
+    df.add_argument("--licenses", default="mit,apache-2.0,bsd-3-clause,bsd-2-clause,isc,cc0-1.0")
+    df.add_argument("--languages", default="Python,JavaScript,TypeScript,HTML,CSS")
+    df.add_argument("--max-mb", type=float, default=2000)
+    df.add_argument("--text-field", default="code")
+    df.add_argument("--license-field", default="license")
+    df.add_argument("--language-field", default="language")
+    df.set_defaults(fn=cmd_data_fetch)
 
     t = sub.add_parser("train", help="pretrain INFINITY HYPER 5.5 from scratch")
     t.add_argument("--config", default="configs/hyper-5.5-tiny.json")
@@ -410,6 +461,14 @@ def build_parser() -> argparse.ArgumentParser:
     mo.add_argument("--base", default=".")
     mo.add_argument("--force-unbenchmarked", action="store_true")
     mo.set_defaults(fn=cmd_model)
+
+    sz = sub.add_parser("size", help="parameters, memory, compute and GPU-hours for a model config")
+    sz.add_argument("--config", default="configs/hyper-5.5-7b.json")
+    sz.add_argument("--tokens", type=int, default=None, help="training tokens (default: 20 x parameters)")
+    sz.add_argument("--price-per-gpu-hour", type=float, default=None)
+    sz.add_argument("--currency", default="INR")
+    sz.add_argument("--json", action="store_true")
+    sz.set_defaults(fn=cmd_size)
 
     ad = sub.add_parser("admin", help="owner account and platform administration")
     ad.add_argument("action", choices=["create-owner", "users", "grant-plan", "audit-verify"])

@@ -24,16 +24,33 @@ class ModelConfig:
     rope_theta: float = 10000.0
     norm_eps: float = 1e-5
     tie_embeddings: bool = True
+    n_kv_heads: int | None = None  # grouped-query attention; None = same as n_heads
+    grad_checkpoint: bool = False  # recompute activations in backward (saves memory at large scale)
 
     def __post_init__(self) -> None:
         if self.d_model % self.n_heads:
             raise ValueError("d_model must be divisible by n_heads")
+        if self.n_kv_heads is not None and (self.n_kv_heads < 1 or self.n_heads % self.n_kv_heads):
+            raise ValueError("n_heads must be a multiple of n_kv_heads")
         if (self.d_model // self.n_heads) % 2:
             raise ValueError("head dimension must be even for rotary embeddings")
 
     @property
     def head_dim(self) -> int:
         return self.d_model // self.n_heads
+
+    @property
+    def kv_heads(self) -> int:
+        return self.n_kv_heads or self.n_heads
+
+    def parameter_count(self) -> int:
+        """Exact parameter count without allocating the model (matches InfinityNeuralCore.num_parameters)."""
+        d, L, ff, V, hd = self.d_model, self.n_layers, self.d_ff, self.vocab_size, self.head_dim
+        attn = d * (self.n_heads + 2 * self.kv_heads) * hd + d * d
+        mlp = 3 * d * ff
+        norms = 2 * d
+        emb = V * d * (1 if self.tie_embeddings else 2)
+        return emb + L * (attn + mlp + norms) + d
 
 
 @dataclass
@@ -55,6 +72,8 @@ class TrainConfig:
     precision: str = "fp32"  # fp32 | bf16 (autocast)
     device: str = "auto"
     num_threads: int = 0  # 0 = torch default
+    strategy: str = "single"  # single | ddp | fsdp (multi-GPU via torchrun)
+    time_budget_hours: float = 0.0  # stop cleanly + checkpoint before this (e.g. Kaggle 12h sessions); 0 = none
 
 
 @dataclass

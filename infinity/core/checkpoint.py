@@ -55,6 +55,23 @@ def save_checkpoint(
     metrics: dict,
     rng_state: dict | None = None,
 ) -> Path:
+    return save_checkpoint_state(ckpt_root, step, model.state_dict(), model.num_parameters(),
+                                 optimizer.state_dict() if optimizer is not None else None,
+                                 run_cfg, tokenizer, metrics, rng_state)
+
+
+def save_checkpoint_state(
+    ckpt_root: Path,
+    step: int,
+    model_state: dict,
+    n_params: int,
+    optimizer_state: dict | None,
+    run_cfg: RunConfig,
+    tokenizer: BPETokenizer,
+    metrics: dict,
+    rng_state: dict | None = None,
+) -> Path:
+    """Save from plain state dicts (used by distributed training after gathering on rank 0)."""
     ckpt_root = Path(ckpt_root)
     ckpt_root.mkdir(parents=True, exist_ok=True)
     final = ckpt_root / f"step_{step:06d}"
@@ -64,11 +81,11 @@ def save_checkpoint(
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir()
-    torch.save(model.state_dict(), tmp / "model.pt")
+    torch.save(model_state, tmp / "model.pt")
     torch.save(
         {
             "step": step,
-            "optimizer": optimizer.state_dict() if optimizer is not None else None,
+            "optimizer": optimizer_state,
             "rng": rng_state or {},
         },
         tmp / "trainer.pt",
@@ -79,7 +96,7 @@ def save_checkpoint(
         "identity": {"family": MODEL_FAMILY, "version": MODEL_VERSION, "run": run_cfg.name},
         "step": step,
         "created_unix": int(time.time()),
-        "parameters": model.num_parameters(),
+        "parameters": n_params,
         "tokenizer_fingerprint": tokenizer.fingerprint(),
         "metrics": metrics,
         "sha256": {name: sha256_file(tmp / name) for name in CHECKPOINT_FILES},
