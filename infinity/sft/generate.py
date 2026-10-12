@@ -19,7 +19,9 @@ from typing import Sequence
 
 from ..agent import Agent, Limits, Mode, PermissionMode, PermissionPolicy
 from ..agent.models import Completion, Message, ModelAdapter, render_chat
-from .tasks import BugTask, expert_actions, make_tasks
+from .tasks import TEST_COMMAND, BugTask, expert_actions, make_tasks
+
+MAX_LEADING_FAILURES = 5  # stop early instead of silently writing an empty dataset
 
 
 class RecordingModel(ModelAdapter):
@@ -53,7 +55,7 @@ def materialise(task: BugTask, root: Path) -> Path:
     ws = root / task.id
     ws.mkdir(parents=True)
     for name, content in task.files.items():
-        (ws / name).write_text(content)
+        (ws / name).write_text(content, encoding="utf-8")
     return ws
 
 
@@ -83,11 +85,17 @@ def generate(out_dir: str | Path, tokenizer, context_tokens: int, n_train: int, 
             tasks = make_tasks(split, n, seed)
             kept = rejected = 0
             path = out / f"{split}.jsonl"
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 for i, task in enumerate(tasks):
                     examples, status = run_expert(task, tokenizer, context_tokens, Path(tmp))
                     if status != "completed_verified":
                         rejected += 1
+                        if kept == 0 and rejected >= MAX_LEADING_FAILURES:
+                            raise RuntimeError(
+                                f"the first {rejected} expert runs all ended as {status!r}, so no training data "
+                                f"would be produced. The task tests could not pass on this machine: check that "
+                                f"`{TEST_COMMAND}` runs in a terminal (on Windows the interpreter running INFINITY "
+                                f"is used for python/python3).")
                         continue
                     kept += 1
                     for ex in examples:

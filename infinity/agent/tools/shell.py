@@ -3,7 +3,8 @@
 - Every command is risk-classified and authorized before it starts.
 - Commands without shell syntax run with ``shell=False`` (no injection).
 - Shell syntax (pipes, redirects, ``&&``) is only executed via ``/bin/sh -c``
-  after the policy allows it, and always counts as at least MEDIUM risk.
+  (``cmd /c`` on Windows) after the policy allows it, and always counts as at
+  least MEDIUM risk.
 - The child environment has credentials stripped; cwd is the workspace.
 - Timeouts and cancellation kill the whole process group.
 """
@@ -11,20 +12,40 @@
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
 
-from ..permissions import Category, classify_command
+from ..permissions import IS_WINDOWS, Category, classify_command, program_name
 from ..redact import redact, scrubbed_env
 from .base import Tool, ToolContext, ToolError, ToolRegistry, ToolResult, require
 
 
+# cmd.exe built-ins have no executable of their own and must run through cmd /c.
+CMD_BUILTINS = {"dir", "type", "echo", "del", "erase", "copy", "move", "ren", "rename", "md", "mkdir",
+                "rd", "rmdir", "cls", "set", "ver", "vol"}
+
+
 def _kill_group(proc: subprocess.Popen) -> None:
+    if IS_WINDOWS:
+        # taskkill /T stops the whole process tree (there are no POSIX process groups).
+        try:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        if proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except (ProcessLookupError, PermissionError):
@@ -38,19 +59,51 @@ def _kill_group(proc: subprocess.Popen) -> None:
             pass
 
 
+def _resolve_program(argv: list[str], path: str | None) -> list[str]:
+    """Windows: find the real executable (PATHEXT: .exe/.cmd/.bat).
+
+    ``python``/``python3`` fall back to the interpreter running INFINITY when
+    they are missing or are only the Microsoft Store placeholder; Windows
+    virtual environments contain ``python.exe`` but no ``python3``.
+    """
+    found = shutil.which(argv[0], path=path)
+    if program_name(argv[0]).lower() in ("python", "python3") and (
+            found is None or "windowsapps" in found.lower()):
+        found = sys.executable
+    return [found or argv[0], *argv[1:]]
+
+
+def spawn_args(command: str, needs_shell: bool, argv: list[str], windows: bool = IS_WINDOWS,
+               path: str | None = None) -> list[str] | str:
+    """What to hand to Popen for an already-authorized command."""
+    if not windows:
+        return ["/bin/sh", "-c", command] if needs_shell else argv
+    if needs_shell or (argv and argv[0].lower() in CMD_BUILTINS):
+        comspec = os.environ.get("COMSPEC", "cmd.exe")
+        return f'"{comspec}" /d /s /c "{command}"'
+    return _resolve_program(argv, path)
+
+
 def _spawn(ctx: ToolContext, assessment) -> subprocess.Popen:
-    args = ["/bin/sh", "-c", assessment.command] if assessment.needs_shell else assessment.argv
+    env = scrubbed_env({"CI": "1", "TERM": "dumb", "NO_COLOR": "1", "PYTHONDONTWRITEBYTECODE": "1",
+                        **({"PYTHONIOENCODING": "utf-8"} if IS_WINDOWS else {})})
+    args = spawn_args(assessment.command, assessment.needs_shell, assessment.argv, path=env.get("PATH"))
+    if IS_WINDOWS:
+        group = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    else:
+        group = {"start_new_session": True}
     return subprocess.Popen(
         args,
         cwd=ctx.workspace.root,
-        env=scrubbed_env({"CI": "1", "TERM": "dumb", "NO_COLOR": "1", "PYTHONDONTWRITEBYTECODE": "1"}),
+        env=env,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
         errors="replace",
         bufsize=1,
-        start_new_session=True,
+        **group,
     )
 
 

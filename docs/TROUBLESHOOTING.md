@@ -37,3 +37,15 @@ the same session, and the file must be unchanged since, before editing it. This 
 
 **Undo agent changes.** Run `infinity rollback --workspace <path>` to list sessions, then
 `infinity rollback --workspace <path> --session <id>`.
+
+**Windows.** Commands run without a shell when possible. Shell syntax (`&&`, `|`, `>`)
+and cmd built-ins (`dir`, `type`, `del`…) go through `cmd /d /s /c`. Timeouts and Stop
+use `taskkill /T` to end the whole process tree. `python` / `python3` fall back to the
+interpreter running INFINITY when they are missing or are only the Microsoft Store
+placeholder (Windows virtual environments have no `python3`). These code paths are
+unit-tested on Linux by forcing the Windows branch (`tests/test_windows.py`). They have
+not yet been run on a real Windows machine in CI.
+
+**`infinity sft generate` stops with "no training data would be produced".** The first
+expert runs all failed, which means the task tests could not run on this machine. Check
+that `python3 -m unittest -q` (or `python -m unittest -q` on Windows) works in a terminal.

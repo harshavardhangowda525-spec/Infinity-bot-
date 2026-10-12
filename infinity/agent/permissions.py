@@ -7,6 +7,7 @@ policy *before* it runs, and the decision (allow / ask / deny) is recorded.
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
 import shlex
 from dataclasses import dataclass, field
@@ -110,6 +111,7 @@ SAFE_PROGRAMS = {
     "ls", "pwd", "cat", "head", "tail", "wc", "grep", "rg", "echo", "which", "file", "stat",
     "tree", "du", "df", "date", "whoami", "uname", "env", "printenv", "diff", "sort", "uniq", "cut",
     "basename", "dirname", "realpath", "true", "false", "test",
+    "dir", "type", "where", "findstr",  # Windows equivalents
 }
 SAFE_GIT = {"status", "diff", "log", "show", "branch", "rev-parse", "ls-files", "blame", "remote", "tag", "describe"}
 CHECK_PATTERNS = [
@@ -135,6 +137,7 @@ HIGH_PROGRAMS = {
     "umount", "crontab", "systemctl", "service", "launchctl", "docker", "podman", "kubectl",
     "terraform", "vercel", "netlify", "firebase", "heroku", "flyctl", "aws", "gcloud", "az",
     "truncate", "shred", "ngrok", "cloudflared", "eval", "exec", "xargs",
+    "del", "erase", "rd", "format", "taskkill", "icacls", "takeown", "reg", "powershell", "pwsh",  # Windows
 }
 HIGH_GIT = {"push", "reset", "clean", "rebase", "filter-branch", "checkout", "restore", "rm", "gc", "reflog", "stash", "config"}
 BLOCKED_PATTERNS = [
@@ -152,6 +155,33 @@ BLOCKED_PATTERNS = [
 SHELL_META = re.compile(r"[|;&<>`]|\$\(|\$\{|\n")
 
 
+IS_WINDOWS = os.name == "nt"
+WINDOWS_ABS = re.compile(r"^([A-Za-z]:[\\/]|\\\\)")  # C:\... or C:/... or \\server\share
+
+
+def split_command(cmd: str, windows: bool = IS_WINDOWS) -> list[str]:
+    """Split a command line into argv.
+
+    POSIX rules treat a backslash as an escape, which would mangle Windows
+    paths (``C:\\Users\\x`` -> ``C:Usersx``), so on Windows the non-POSIX
+    splitter is used and surrounding quotes are removed from each token.
+    """
+    if not windows:
+        return shlex.split(cmd)
+    out = []
+    for tok in shlex.split(cmd, posix=False):
+        if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in "\"'":
+            tok = tok[1:-1]
+        out.append(tok)
+    return out
+
+
+def program_name(arg0: str) -> str:
+    """``/usr/bin/python3`` -> ``python3``; ``C:\\Py\\python.exe`` -> ``python``."""
+    name = re.split(r"[\\/]", arg0)[-1]
+    return re.sub(r"\.(exe|cmd|bat|com)$", "", name, flags=re.IGNORECASE)
+
+
 @dataclass
 class CommandAssessment:
     command: str
@@ -162,7 +192,7 @@ class CommandAssessment:
     is_check: bool = False
 
 
-def classify_command(command: str, workspace: Workspace | None = None) -> CommandAssessment:
+def classify_command(command: str, workspace: Workspace | None = None, windows: bool = IS_WINDOWS) -> CommandAssessment:
     cmd = command.strip()
     reasons: list[str] = []
     if not cmd:
@@ -173,7 +203,7 @@ def classify_command(command: str, workspace: Workspace | None = None) -> Comman
 
     needs_shell = bool(SHELL_META.search(cmd))
     try:
-        argv = shlex.split(cmd)
+        argv = split_command(cmd, windows)
     except ValueError as e:
         return CommandAssessment(command, Risk.BLOCKED, [f"unparseable command: {e}"])
     if not argv:
@@ -185,7 +215,7 @@ def classify_command(command: str, workspace: Workspace | None = None) -> Comman
     worst = Risk.SAFE
     all_check = True
     for seg in segments:
-        r, why, is_check = _classify_simple(seg)
+        r, why, is_check = _classify_simple(seg, windows)
         reasons.extend(why)
         all_check = all_check and is_check
         if order.index(r) > order.index(worst):
@@ -206,7 +236,7 @@ def classify_command(command: str, workspace: Workspace | None = None) -> Comman
                 tok = tok.split("=", 1)[-1] if "=" in tok else ""
             if not tok:
                 continue
-            if tok.startswith(("/", "~", "..")):
+            if tok.startswith(("/", "~", "..")) or WINDOWS_ABS.match(tok):
                 try:
                     workspace.resolve(tok)
                 except PathError:
@@ -226,9 +256,9 @@ def _split_segments(cmd: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def _classify_simple(seg: str) -> tuple[Risk, list[str], bool]:
+def _classify_simple(seg: str, windows: bool = IS_WINDOWS) -> tuple[Risk, list[str], bool]:
     try:
-        argv = shlex.split(seg)
+        argv = split_command(seg, windows)
     except ValueError:
         return Risk.HIGH, [f"unparseable segment: {seg}"], False
     # Strip leading VAR=value assignments.
@@ -236,7 +266,9 @@ def _classify_simple(seg: str) -> tuple[Risk, list[str], bool]:
         argv = argv[1:]
     if not argv:
         return Risk.SAFE, [], False
-    prog = Path(argv[0]).name
+    prog = program_name(argv[0])
+    if windows:
+        prog = prog.lower()
     norm = " ".join([prog] + argv[1:])
     for pat in CHECK_PATTERNS:
         if re.search(pat, norm):
