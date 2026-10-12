@@ -1,0 +1,18 @@
+{
+  "description": "Smoke-test corpus for INFINITY HYPER 5.5 tiny prototype. Every source must declare a license from infinity.core.data.ALLOWED_LICENSES.",
+  "sources": [
+    {
+      "name": "infinity-original",
+      "license": "Project-Original",
+      "origin": "Text written for this repository (data/corpus/).",
+      "include": ["data/corpus/**/*.md", "data/corpus/**/*.txt"]
+    },
+    {
+      "name": "python-stdlib",
+      "license": "PSF-2.0",
+      "origin": "CPython standard library modules from the local Python install (top-level *.py only). Read at prepare time, not redistributed in this repo. License: {stdlib}/LICENSE.txt",
+      "include": ["{stdlib}/*.py"],
+      "max_files": 160
+    }
+  ]
+}

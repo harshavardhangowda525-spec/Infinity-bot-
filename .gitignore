@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+# training outputs and runtime state (large / machine-specific)
+runs/
+data/prepared/
+.infinity/
+.env
+.env.*
+!.env.example
