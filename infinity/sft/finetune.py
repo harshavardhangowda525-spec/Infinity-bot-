@@ -86,7 +86,8 @@ def eval_loss(model, data: SFTData, batch_size: int, device: str, limit: int = 4
 
 
 def finetune(base: str, data_dir: str | Path, out_dir: str | Path, steps: int = 1200, context: int = 512, batch_size: int = 16,
-             lr: float = 1e-3, warmup: int = 50, seed: int = 1337, eval_every: int = 200, log=print, stop_flag=None) -> dict:
+             lr: float = 1e-3, warmup: int = 50, seed: int = 1337, eval_every: int = 200, log=print, stop_flag=None,
+             save_every_eval: bool = True) -> dict:
     data_dir, out_dir = Path(data_dir), Path(out_dir)
     if (out_dir / "checkpoints").exists() and any((out_dir / "checkpoints").glob("step_*")):
         raise FileExistsError(f"{out_dir} already has checkpoints; choose a new output directory (runs are never overwritten)")
@@ -140,6 +141,10 @@ def finetune(base: str, data_dir: str | Path, out_dir: str | Path, steps: int = 
         if (step + 1) % eval_every == 0 or step + 1 == steps:
             rec["eval_loss"] = round(eval_loss(model, evald, batch_size, device), 5)
             log(f"step {step + 1:>5} loss {rec['loss']:.4f} eval {rec['eval_loss']:.4f} {rec['elapsed_s']:.0f}s")
+            if save_every_eval and step + 1 < steps:
+                # Keep intermediate checkpoints so the best one can be chosen by benchmark (eval loss != task success).
+                save_checkpoint(out_dir / "checkpoints", step + 1, model, None, run_cfg, tok,
+                                {**rec, "eval_loss_before": round(before, 5), "lineage": lineage})
         elif (step + 1) % 25 == 0:
             log(f"step {step + 1:>5} loss {rec['loss']:.4f} {rec['elapsed_s']:.0f}s")
         with open(log_path, "a") as f:
