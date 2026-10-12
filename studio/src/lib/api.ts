@@ -1,6 +1,9 @@
-import type { AgentEvent, Checkpoint, Mode, Permission, Project, RecentProject, Status, TreeNode } from "./types";
+import type {
+  AdminOverview, AdminUser, AgentEvent, ApiKey, AuditEvent, BillingMe, Catalog, Checkpoint, CheckoutResult, Me, Mode,
+  Permission, Plan, Project, RecentProject, Status, TreeNode,
+} from "./types";
 
-let token: string | null = null;
+let token: string | null = null; // per-session CSRF token from /api/auth/me
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -15,7 +18,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (!token) await ensureSession();
     headers["x-infinity-token"] = token ?? "";
   }
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(path, { ...init, headers, credentials: "same-origin" });
+  if (res.status === 401) {
+    token = null;
+    window.dispatchEvent(new Event("infinity:unauthorized"));
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -31,9 +38,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export async function ensureSession(): Promise<string> {
   if (token) return token;
-  const s = await request<{ token: string }>("/api/session");
-  token = s.token;
+  const me = await request<Me>("/api/auth/me");
+  token = me.csrf;
   return token;
+}
+
+export function clearSession() {
+  token = null;
 }
 
 export const api = {
@@ -59,6 +70,60 @@ export const api = {
     request(`/api/approvals/${id}`, { method: "POST", body: JSON.stringify({ approve }) }),
   rollback: (session: string) =>
     request<{ restored: string[] }>("/api/rollback", { method: "POST", body: JSON.stringify({ session }) }),
+
+  // ---- accounts
+  setup: () => request<{ owner_exists: boolean; registration: boolean }>("/api/setup"),
+  me: () => request<Me>("/api/auth/me"),
+  login: async (email: string, password: string) => {
+    token = null;
+    const r = await fetch("/api/auth/login", {
+      method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin",
+      body: JSON.stringify({ email, password }),
+    });
+    if (!r.ok) throw new ApiError(r.status, (await r.json().catch(() => ({}))).detail ?? r.statusText);
+  },
+  register: async (email: string, password: string) => {
+    const r = await fetch("/api/auth/register", {
+      method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin",
+      body: JSON.stringify({ email, password }),
+    });
+    if (!r.ok) throw new ApiError(r.status, (await r.json().catch(() => ({}))).detail ?? r.statusText);
+  },
+  logout: async () => {
+    await request("/api/auth/logout", { method: "POST" });
+    token = null;
+  },
+
+  // ---- billing
+  plans: () => request<Catalog>("/api/plans"),
+  billing: () => request<BillingMe>("/api/billing/me"),
+  checkout: (plan: string, period: "monthly" | "yearly") =>
+    request<CheckoutResult>("/api/billing/checkout", { method: "POST", body: JSON.stringify({ plan, period }) }),
+  cancelSubscription: () => request("/api/billing/cancel", { method: "POST" }),
+
+  // ---- keys
+  keys: () => request<{ keys: ApiKey[] }>("/api/keys"),
+  createKey: (name: string, rate_limit_per_min: number) =>
+    request<{ key: ApiKey & { secret: string }; notice: string }>("/api/keys", { method: "POST", body: JSON.stringify({ name, rate_limit_per_min }) }),
+  rotateKey: (id: number) => request<{ key: ApiKey & { secret: string } }>(`/api/keys/${id}/rotate`, { method: "POST" }),
+  revokeKey: (id: number) => request<{ key: ApiKey }>(`/api/keys/${id}/revoke`, { method: "POST" }),
+
+  // ---- admin (owner only; the server enforces it)
+  adminOverview: () => request<AdminOverview>("/api/admin/overview"),
+  adminUsers: (q = "") => request<{ users: AdminUser[] }>(`/api/admin/users?q=${encodeURIComponent(q)}`),
+  adminStatus: (id: number, status: "active" | "suspended", reason: string) =>
+    request(`/api/admin/users/${id}/status`, { method: "POST", body: JSON.stringify({ status, reason }) }),
+  adminCredits: (id: number, delta: number, reason: string) =>
+    request<{ balance: number }>(`/api/admin/users/${id}/credits`, { method: "POST", body: JSON.stringify({ delta, reason }) }),
+  adminGrant: (id: number, plan: string, reason: string) =>
+    request(`/api/admin/users/${id}/grant`, { method: "POST", body: JSON.stringify({ plan, reason }) }),
+  adminRevokeSessions: (id: number, reason: string) =>
+    request(`/api/admin/users/${id}/revoke-sessions`, { method: "POST", body: JSON.stringify({ reason }) }),
+  adminRoots: (id: number, roots: string[], reason: string) =>
+    request(`/api/admin/users/${id}/workspace-roots`, { method: "POST", body: JSON.stringify({ roots, reason }) }),
+  adminPlan: (id: string, changes: Partial<Plan>, reason: string, confirm_price_change = false) =>
+    request<{ plan: Plan }>(`/api/admin/plans/${id}`, { method: "PATCH", body: JSON.stringify({ changes, reason, confirm_price_change }) }),
+  adminAudit: () => request<{ events: AuditEvent[]; chain: { ok: boolean; checked: number; broken_at?: number } }>("/api/admin/audit"),
 };
 
 /** Event stream with automatic reconnect; resumes from the last seen sequence number. */
@@ -73,9 +138,8 @@ export function connectEvents(
 
   const open = async () => {
     try {
-      const t = await ensureSession();
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/api/events?token=${encodeURIComponent(t)}&since=${since}`);
+      ws = new WebSocket(`${proto}://${location.host}/api/events?since=${since}`); // authenticated by the session cookie
       ws.onopen = () => onConnection(true);
       ws.onmessage = (m) => {
         const data = JSON.parse(m.data) as { events: AgentEvent[] };

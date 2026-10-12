@@ -116,3 +116,155 @@ export interface TaskReport {
 }
 
 export type CoreState = "idle" | "listening" | "thinking" | "executing" | "speaking" | "success" | "error";
+
+export interface Plan {
+  id: string;
+  name: string;
+  tagline: string;
+  monthly_price_inr: number;
+  paid: boolean;
+  cook: boolean;
+  api_access: boolean;
+  monthly_token_credits: number | null;
+  max_task_steps: number | null;
+  requests_per_minute: number | null;
+  priority: string;
+  popular: boolean;
+  features: string[];
+  cta: string | null;
+  accepting_new: boolean;
+}
+
+export interface Catalog {
+  currency: "INR";
+  yearly_billing: { enabled: boolean; note?: string };
+  payment_provider: { configured: boolean; mode: string };
+  plans: Plan[];
+}
+
+export interface Subscription {
+  id: number;
+  plan: string;
+  status: string;
+  billing_period: string;
+  price_inr: number;
+  source: string;
+  current_period_start: number;
+  current_period_end: number;
+  cancel_at_period_end: number;
+}
+
+export interface Entitlement {
+  plan: { id: string; name: string; monthly_price_inr: number; monthly_token_credits: number | null; max_task_steps: number | null };
+  subscription: Subscription | null;
+  balance: number;
+  cook: boolean;
+  cook_reason: string | null;
+  api: boolean;
+  owner_exempt: boolean;
+}
+
+export interface Account {
+  id: number;
+  email: string;
+  role: "user" | "owner";
+  status: string;
+  workspace_roots: string[];
+  created_at: number;
+}
+
+export interface Me {
+  user: Account;
+  csrf: string;
+  entitlement: Entitlement;
+}
+
+export interface LedgerEntry {
+  id: number;
+  delta: number;
+  kind: string;
+  reason: string;
+  ref: string | null;
+  created_at: number;
+}
+
+export interface UsageSummary {
+  days: number;
+  tokens_in: number;
+  tokens_out: number;
+  requests: number;
+  estimated_events: number;
+  failed_events: number;
+  daily: { day: number; tin: number; tout: number; n: number }[];
+  by_source: { source: string; tin: number; tout: number; n: number }[];
+}
+
+export interface BillingMe {
+  entitlement: Entitlement;
+  ledger: LedgerEntry[];
+  usage: UsageSummary;
+  subscriptions: Subscription[];
+}
+
+export interface CheckoutResult {
+  mode: "development" | string;
+  activated: boolean;
+  message: string;
+  summary: { plan: string; plan_name: string; price_inr: number; currency: string; billing_period: string; monthly_token_credits: number | null };
+}
+
+export interface ApiKey {
+  id: number;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  status: "active" | "revoked";
+  rate_limit_per_min: number;
+  created_at: number;
+  last_used_at: number | null;
+  revoked_at: number | null;
+  request_count: number;
+  error_count: number;
+  tokens_in: number;
+  tokens_out: number;
+}
+
+export interface AdminUser {
+  id: number;
+  email: string;
+  role: string;
+  status: string;
+  workspace_roots: string;
+  created_at: number;
+  last_login_at: number | null;
+  last_active_at: number | null;
+  plan: string;
+  subscription_status: string | null;
+  balance: number;
+  usage_30d: number;
+}
+
+export interface AuditEvent {
+  id: number;
+  actor_id: number | null;
+  action: string;
+  target: string | null;
+  success: number;
+  reason: string | null;
+  created_at: number;
+}
+
+export interface AdminOverview {
+  users: { total: number; active_24h: number; suspended: number };
+  subscriptions: Record<string, number>;
+  active_by_plan: Record<string, number>;
+  revenue_30d: { currency: string; gross_inr: number; refunds_inr: number; net_inr: number; verified_payments: number; refunds: number; failed_payments: number };
+  usage_30d: UsageSummary;
+  model: ModelStatus;
+  tasks: (TaskSummary & { user_id: number; busy: boolean })[];
+  security: AuditEvent[];
+  audit_chain: { ok: boolean; checked: number; broken_at?: number };
+  payment_provider: { configured: boolean; mode: string };
+  ledger_duplicates: unknown[];
+  database: { migrations: { version: number; applied_at: number }[]; path: string };
+}

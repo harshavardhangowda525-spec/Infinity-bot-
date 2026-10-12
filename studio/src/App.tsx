@@ -6,14 +6,23 @@ import ModelStatus from "./components/ModelStatus";
 import ProjectLauncher from "./components/ProjectLauncher";
 import SettingsPopover, { loadSettings, saveSettings, type Settings } from "./components/SettingsPopover";
 import TaskWorkspace, { PANELS, type PanelId } from "./components/TaskWorkspace";
+import BottomNav, { type View } from "./components/BottomNav";
+import UpgradeOverlay from "./components/UpgradeOverlay";
 import { api } from "./lib/api";
+import { num } from "./lib/format";
 import { useStore } from "./lib/store";
-import type { Checkpoint, Mode } from "./lib/types";
+import type { Checkpoint, Me, Mode } from "./lib/types";
+import AdminView from "./views/AdminView";
+import KeysView from "./views/KeysView";
+import PlansView from "./views/PlansView";
+import TokensView from "./views/TokensView";
 
 const ALL_PANELS: PanelId[] = ["task", "review", "files", "code", "stream"];
 
-export default function App() {
+export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe: () => void; onLoggedOut: () => void }) {
   const store = useStore();
+  const [view, setView] = useState<View>("home");
+  const [upgrade, setUpgrade] = useState(false);
   const { status, connected } = store;
   const [mode, setMode] = useState<Mode>("code");
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
@@ -71,8 +80,12 @@ export default function App() {
     window.speechSynthesis.speak(u);
   }, [store.report, settings.readAloud, store]);
 
+  const ent = (status as (typeof status & { entitlement?: Me["entitlement"] }) | null)?.entitlement ?? me.entitlement;
+  const isOwner = me.user.role === "owner";
   const busy = status?.agent.busy ?? false;
-  const disabledReason = !connected
+  const disabledReason = !ent.cook
+    ? null // gate shown as a hint; submitting opens the upgrade screen (the server enforces it too)
+    : !connected
     ? "INFINITY runtime is not reachable — start it with `infinity studio`"
     : !status?.workspace
       ? "Attach a project first (paperclip below, or Ctrl+O)"
@@ -82,6 +95,10 @@ export default function App() {
 
   const submit = async (text: string) => {
     setNotice(null);
+    if (!ent.cook) {
+      setUpgrade(true);
+      return;
+    }
     try {
       store.clearTaskView();
       await api.startTask(text, mode);
@@ -118,6 +135,10 @@ export default function App() {
         <div className="flex flex-1 justify-center">
           <ModelStatus status={status} connected={connected} />
         </div>
+        <div className="hidden lg:block">
+          <BottomNav view={view} onView={setView} isOwner={isOwner} email={me.user.email}
+            onLogout={() => api.logout().finally(onLoggedOut)} />
+        </div>
         <div className="flex items-center gap-2">
           <span
             className={`glass hidden items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] tracking-wider sm:flex ${connected ? "text-emerald-300" : "text-red-300"}`}
@@ -126,6 +147,10 @@ export default function App() {
             <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-300" : "bg-red-400"}`} />
             {connected ? "CONNECTED" : "OFFLINE"}
           </span>
+          <button onClick={() => setView("tokens")} title="Plan and remaining credits"
+            className="glass hidden items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] tracking-wider text-slate-300 hover:text-white md:flex">
+            {isOwner ? "OWNER · usage not charged" : `${ent.subscription ? ent.plan.name : "FREE"} · ${num(ent.balance)} credits`}
+          </button>
           <button
             onClick={() => setOpen(open.size === ALL_PANELS.length ? new Set() : new Set(ALL_PANELS))}
             aria-pressed={open.size === ALL_PANELS.length}
@@ -143,6 +168,21 @@ export default function App() {
         </div>
       </header>
 
+      {view !== "home" && (
+        <div className="absolute inset-0 z-20">
+          {view === "plans" && <PlansView entitlement={ent} onBack={() => setView("home")} />}
+          {view === "tokens" && <TokensView onPlans={() => setView("plans")} />}
+          {view === "keys" && <KeysView apiAllowed={ent.api || isOwner} onPlans={() => setView("plans")} />}
+          {view === "admin" && isOwner && <AdminView />}
+        </div>
+      )}
+      <div className="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 lg:hidden">
+        {view !== "home" && (
+          <BottomNav view={view} onView={setView} isOwner={isOwner} email={me.user.email} onLogout={() => api.logout().finally(onLoggedOut)} />
+        )}
+      </div>
+
+      {view === "home" && (<>
       {/* CENTER */}
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4">
         <div className="relative">
@@ -211,15 +251,26 @@ export default function App() {
           model={status?.model}
           checkpoints={checkpoints}
           onSelectModel={selectModel}
-          onAttach={() => setLauncher(true)}
+          onAttach={() => (ent.cook ? setLauncher(true) : setUpgrade(true))}
           workspaceName={workspaceName}
           taskText={store.taskText}
           onListening={store.setListening}
           amplitude={store.amplitude}
+          placeholder={ent.cook ? undefined : `COOK locked — ${ent.cook_reason ?? "paid plan required"}. Press Enter to see plans.`}
         />
       </footer>
 
       <TaskWorkspace open={open} setOpen={setOpen} selectedFile={selectedFile} setSelectedFile={setSelectedFile} />
+      </>)}
+      {view === "home" && (
+        <div className="fixed left-3 top-14 z-40 lg:hidden">
+          <BottomNav view={view} onView={setView} isOwner={isOwner} email={me.user.email} onLogout={() => api.logout().finally(onLoggedOut)} />
+        </div>
+      )}
+      {upgrade && (
+        <UpgradeOverlay reason={ent.cook_reason ?? "COOK requires an active Plus, Pro or Max subscription"} onClose={() => { setUpgrade(false); refreshMe(); }}
+          onComparePlans={() => { setUpgrade(false); setView("plans"); }} />
+      )}
 
       {launcher && (
         <ProjectLauncher

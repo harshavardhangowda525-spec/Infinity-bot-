@@ -1,0 +1,74 @@
+{
+  "_comment": "Single source of plan data. Prices are in INR per month. Quantities set to null are NOT CONFIGURED: the platform will not invent them. The owner sets them from the admin console (stored in the database, audited). This file seeds the database on first run only.",
+  "currency": "INR",
+  "yearly_billing": {
+    "enabled": false,
+    "note": "Yearly billing is unavailable until yearly prices are configured."
+  },
+  "plans": [
+    {
+      "id": "free",
+      "name": "FREE",
+      "tagline": "Explore INFINITY BOT",
+      "monthly_price_inr": 0,
+      "paid": false,
+      "cook": false,
+      "api_access": false,
+      "monthly_token_credits": null,
+      "max_task_steps": null,
+      "requests_per_minute": null,
+      "priority": "standard",
+      "popular": false,
+      "features": ["Explore the interface", "View plans"],
+      "cta": null
+    },
+    {
+      "id": "plus",
+      "name": "PLUS",
+      "tagline": "For everyday AI exploration",
+      "monthly_price_inr": 500,
+      "paid": true,
+      "cook": true,
+      "api_access": true,
+      "monthly_token_credits": null,
+      "max_task_steps": null,
+      "requests_per_minute": null,
+      "priority": "standard",
+      "popular": false,
+      "features": ["COOK coding agent", "Basic coding assistance and smaller tasks", "Standard response priority", "Agent API keys"],
+      "cta": "GET PLUS"
+    },
+    {
+      "id": "pro",
+      "name": "PRO",
+      "tagline": "For developers and creators",
+      "monthly_price_inr": 1000,
+      "paid": true,
+      "cook": true,
+      "api_access": true,
+      "monthly_token_credits": null,
+      "max_task_steps": null,
+      "requests_per_minute": null,
+      "priority": "higher",
+      "popular": true,
+      "features": ["COOK coding agent", "Advanced multi-file coding and project analysis", "Higher supported usage limits", "Agent API keys"],
+      "cta": "UPGRADE TO PRO"
+    },
+    {
+      "id": "max",
+      "name": "MAX",
+      "tagline": "For intensive AI workflows",
+      "monthly_price_inr": 2000,
+      "paid": true,
+      "cook": true,
+      "api_access": true,
+      "monthly_token_credits": null,
+      "max_task_steps": null,
+      "requests_per_minute": null,
+      "priority": "highest",
+      "popular": false,
+      "features": ["COOK coding agent", "Highest standard coding-task allowance", "Advanced agent capabilities where supported", "Highest supported usage limits", "Agent API keys"],
+      "cta": "UNLOCK MAX"
+    }
+  ]
+}

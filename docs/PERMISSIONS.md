@@ -41,3 +41,12 @@ See `classify_command()`. Compound shell lines take the risk of their most
 dangerous part, and shell syntax is at least MEDIUM. The exception is a
 read-only pipe into `head`, `tail`, `grep` and similar. Arguments that point
 outside the workspace or at secret files raise the risk to HIGH.
+
+## Accounts and COOK (dashboard)
+
+- Only the **owner** may open any folder. Other accounts may open folders only inside the
+  **workspace roots** the owner assigned (Admin → Users → Workspaces). Each refusal is audited.
+- COOK needs an active paid plan with credits. The server checks this on every workspace and
+  task request, so editing the frontend or calling the API directly does not get around it.
+- Each account has its own agent runtime: its own workspace, tasks, approvals and event stream.
+- Only the owner can switch the active model checkpoint.

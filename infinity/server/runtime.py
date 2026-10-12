@@ -163,7 +163,7 @@ class Runtime:
             entry["event"].set()
             return True
 
-    def start_task(self, text: str, mode: str, max_steps: int = 25) -> dict:
+    def start_task(self, text: str, mode: str, max_steps: int = 25, on_done=None) -> dict:
         with self.lock:
             if self.busy:
                 raise RuntimeError("a task is already running")
@@ -180,9 +180,16 @@ class Runtime:
             def run():
                 try:
                     report = agent.run(text)
+                    rd = report.to_dict()
+                    if on_done is not None:
+                        try:
+                            rd["billing"] = on_done(rd)
+                        except Exception as e:  # metering failure is reported, never hidden
+                            rd["billing"] = {"error": f"{type(e).__name__}: {e}"}
+                            self.errors.append({"time": time.time(), "message": f"usage metering failed: {e}"})
                     with self.lock:
-                        self.task.update(state="finished", report=report.to_dict(), finished_at=time.time())
-                    self.emit({"type": "report", "report": report.to_dict()})
+                        self.task.update(state="finished", report=rd, finished_at=time.time())
+                    self.emit({"type": "report", "report": rd})
                 except Exception as e:  # report, never crash the server
                     with self.lock:
                         self.task.update(state="error", error=f"{type(e).__name__}: {e}")
@@ -220,3 +227,72 @@ class Runtime:
                 "recent_errors": list(self.errors)[-10:],
                 "last_seq": self.seq,
             }
+
+
+class RuntimeHub:
+    """One agent runtime per user (own workspace, task, events, approvals); one shared model."""
+
+    def __init__(self, base_dir: Path, memory: Memory | None = None) -> None:
+        self.base_dir = Path(base_dir)
+        self.memory = memory or Memory()
+        self.lock = threading.RLock()
+        self.runtimes: dict[int, Runtime] = {}
+        self.model: ModelAdapter | None = None
+        self.model_error: str | None = "no checkpoint loaded"
+
+    def get(self, user_id: int) -> Runtime:
+        with self.lock:
+            rt = self.runtimes.get(user_id)
+            if rt is None:
+                rt = Runtime(self.base_dir, self.memory)
+                rt.model, rt.model_error = self.model, self.model_error
+                self.runtimes[user_id] = rt
+            return rt
+
+    def set_model(self, model: ModelAdapter | None, error: str | None) -> None:
+        with self.lock:
+            self.model, self.model_error = model, error
+            for rt in self.runtimes.values():
+                rt.model, rt.model_error = model, error
+                rt.emit({"type": "model", "info": model.info() if model else None, "error": error})
+
+    def any_busy(self) -> bool:
+        return any(rt.busy for rt in self.runtimes.values())
+
+    def load_model(self, checkpoint: str) -> None:
+        if self.any_busy():
+            raise RuntimeError("cannot switch model while a task is running")
+        try:
+            model = NeuralCoreModel(checkpoint)
+        except ModelUnavailable as e:
+            self.set_model(None, str(e))
+            raise
+        self.set_model(model, None)
+
+    def autoload_latest(self) -> None:
+        ckpts = find_checkpoints(self.base_dir)
+        if not ckpts:
+            self.set_model(None, "no trained checkpoint found under runs/ — run `infinity train` first")
+            return
+        best = max(ckpts, key=lambda c: (c["run"], c["step"] or 0))
+        try:
+            self.load_model(best["path"])
+        except ModelUnavailable:
+            pass
+
+    def model_status(self) -> dict:
+        if self.model is None:
+            return {"state": "unavailable", "reason": self.model_error}
+        return {"state": "ready", "locality": "local", **self.model.info()}
+
+    def active_tasks(self) -> list[dict]:
+        out = []
+        for uid, rt in self.runtimes.items():
+            if rt.task:
+                t = {k: v for k, v in rt.task.items() if k != "report"}
+                t["user_id"] = uid
+                t["busy"] = rt.busy
+                if rt.task.get("report"):
+                    t["status"] = rt.task["report"]["status"]
+                out.append(t)
+        return out

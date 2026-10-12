@@ -14,8 +14,9 @@ repository. No pretrained weights and no external AI APIs are used.
 > `blocked` instead of pretending. Making the model useful for agent work
 > needs far more data and compute (see `docs/FEASIBILITY.md`). The
 > **INFINITY STUDIO** dashboard (3D infinity core, command dock, floating
-> workspace panels) runs on top of the real agent. Accounts, subscriptions,
-> COOK gating and the admin center are later increments; see `docs/FEATURES.md`.
+> workspace panels) runs on top of the real agent. Accounts, plans, the credit
+> ledger, COOK gating, agent API keys and an owner admin console are in place.
+> Payments run in development mode. See `docs/FEATURES.md`.
 
 ## Layout
 
@@ -24,7 +25,8 @@ infinity/
   core/        tokenizer.py  model.py  trainer.py  inference.py  checkpoint.py  data.py  config.py
   agent/       loop.py (brain)  protocol.py  permissions.py  memory.py  checkpoints.py  redact.py
                models/ (adapter interface)   tools/ (fs, shell, git)
-  server/      app.py (FastAPI, local only)  runtime.py
+  server/      app.py (FastAPI, local only)  runtime.py (per-user runtimes, shared model)
+  platform/    auth.py  billing.py (plans, subscriptions, payments, ledger)  keys.py  audit.py  db.py (migrations)
   audit.py     cli.py
 studio/        INFINITY STUDIO — React + TypeScript + Tailwind + Framer Motion + React Three Fiber
 configs/       hyper-5.5-tiny.json  hyper-5.5-small.json
@@ -74,23 +76,34 @@ infinity agent --workspace ~/code/myproject --model neural:runs/hyper-5.5-tiny \
 `--model scripted:file.json` replays a fixed list of actions. It is a test
 double for exercising the runtime, and reports itself as such.
 
-## INFINITY STUDIO (dashboard)
+## INFINITY STUDIO (dashboard and platform)
 
 ```bash
 pip install fastapi uvicorn websockets          # backend extras (or: pip install -e ".[studio]")
 cd studio && npm install && npm run build && cd ..
-infinity studio --workspace ~/code/myproject --permission ask
-# open http://127.0.0.1:8765
+infinity admin create-owner --email you@example.com   # once; you type the password (no default account exists)
+infinity studio                                       # http://127.0.0.1:8765, then sign in
 ```
 
-- The server binds to **127.0.0.1 only**, rejects foreign Host and Origin headers,
-  and requires a per-launch session token for every action.
-- The model pill, connection indicator, core animation, task panel, execution
-  stream and change review all come from the backend's real state and events.
-- Approvals for edits and risky commands appear in **Change review**, with the diff.
-  Unanswered approvals are rejected automatically after 5 minutes.
-- Frontend development: run `npm run dev` in `studio/` (Vite proxies `/api` to port 8765).
-- Shortcuts: Enter to send · Shift+Enter for a new line · Ctrl+O project · Ctrl+. workspace.
+- **Security:** the server binds to **127.0.0.1 only** and rejects foreign Host and Origin headers.
+  - Accounts use scrypt-hashed passwords and HttpOnly SameSite=Strict session cookies.
+  - Every state-changing request needs that session's CSRF token.
+  - Logins are throttled after repeated failures.
+- **Plans:** PLUS ₹500, PRO ₹1,000, MAX ₹2,000 per month, all from one source (`configs/plans.json`, seeded into the database).
+  - Token allowances, step limits and rate limits start **unconfigured**. Set them in **Admin → Plans**; every change is audited.
+  - Yearly billing shows as unavailable.
+- **Payments:** development mode. Checkout never charges and never activates anything.
+  - A subscription activates only from a payment notification signed with `INFINITY_BILLING_WEBHOOK_SECRET` and matching the plan price (`POST /api/billing/webhook`, HMAC-SHA256 in `X-Infinity-Signature`).
+  - Or from an audited owner grant: Admin → Users, or `infinity admin grant-plan`.
+- **COOK** (agent tasks on this machine) is checked on the server on every request.
+  - It needs an active PLUS, PRO or MAX plan with credits, and a folder inside a workspace root the owner authorised for that account.
+  - The owner is exempt: their usage is recorded but not charged.
+- **Credits:** an append-only ledger with idempotency keys. Actual token usage (exact counts from the INFINITY tokenizer) is deducted after each COOK task and API call.
+- **Agent API keys:** create, rotate and revoke them under **API keys**. Each key is shown once.
+  - Agents call `POST /api/v1/generate` with `Authorization: Bearer inf_…`. Calls are rate limited and metered.
+- **Admin console** (owner only): accounts, subscriptions, verified revenue (refunds subtracted, failed payments excluded), token usage, security events, plan configuration, and a hash-chained audit log.
+- **Frontend development:** run `npm run dev` in `studio/`.
+- **Shortcuts:** Enter to send · Shift+Enter for a new line · Ctrl+O project · Ctrl+. workspace.
 
 ## Tests
 

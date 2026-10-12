@@ -41,6 +41,7 @@ export default function CommandDock({
   taskText,
   onListening,
   amplitude,
+  placeholder,
 }: {
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -56,6 +57,7 @@ export default function CommandDock({
   taskText: string | null;
   onListening: (v: boolean) => void;
   amplitude: React.MutableRefObject<number>;
+  placeholder?: string;
 }) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -174,7 +176,7 @@ export default function CommandDock({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
-          placeholder={blocked ? disabledReason! : "What should I build today?"}
+          placeholder={blocked ? disabledReason! : placeholder ?? "What should I build today?"}
           aria-describedby="dock-hint"
           className="scroll-thin min-h-[52px] flex-1 resize-none rounded-xl border border-white/5 bg-black/30 px-3.5 py-3 text-[15px] text-slate-100 placeholder:text-slate-500 focus:border-cyan-glow/40 focus:outline-none"
         />

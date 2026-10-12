@@ -62,13 +62,32 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Live website preview panel | ⬜ | |
 | Intelligence panel with benchmark history | ⬜ | no benchmarks exist yet |
 
-## Platform (image 2 and earlier specs)
+## Platform (image 2)
 
-| Feature | Status |
-|---|---|
-| Accounts / authentication | ⬜ |
-| Subscriptions (Plus ₹500, Pro ₹1,000, Max ₹2,000), credit ledger, plan gating, COOK gating | ⬜ |
-| Normal chat mode | ⬜ |
-| Token / API-key platform, agent registry | ⬜ |
-| Owner admin command center | ⬜ |
-| Payment provider (dev mode only, as decided) | ⬜ |
+| Feature | Status | Notes |
+|---|---|---|
+| Accounts: register, sign in, sign out, scrypt hashing, session cookies, CSRF, login throttling, idle and absolute expiry | ✅ | `infinity/platform/auth.py`, `tests/test_platform.py`, `tests/test_server.py` |
+| Owner account created explicitly from the CLI; no default credentials | ✅ | `infinity admin create-owner` |
+| Owner/user roles enforced on every admin endpoint | ✅ | |
+| Plans PLUS ₹500 / PRO ₹1,000 / MAX ₹2,000 from one data source; INR; yearly disabled | ✅ | `configs/plans.json` seeds the database |
+| Allowances / step limits / rate limits configurable by owner; null = not configured | ✅ | never invented |
+| Subscription page: hero, toggle, 3 cards with Pro highlight, comparison table, confirmation dialog, footer | ✅ | footer policies say "not published yet" (no text was provided) |
+| Checkout: development-mode message, no activation | ✅ | |
+| Payment provider integration (Razorpay/Stripe checkout) | ⬜ | you chose dev mode; the generic signed webhook is ready for an adapter |
+| Signed payment webhook: amount/currency check, idempotent events, refunds, failed payments | ✅ | |
+| Subscription expiry and cancel-at-period-end | ✅ | expiry is checked lazily on access; no background job |
+| Credit ledger: append-only, idempotent, atomic; monthly allocation | ✅ | concurrency test |
+| Automatic monthly renewal / re-allocation without a new payment event | ⬜ | each paid period needs a verified payment event |
+| COOK gating on the server (direct API calls cannot bypass it) | ✅ | 402 with a clear reason; upgrade overlay in the UI |
+| Workspace roots per user (COOK on the host is limited to owner-authorised folders) | ✅ | |
+| Per-user agent runtimes (no cross-user events, files or tasks) | ✅ | |
+| Usage metering: exact tokens for COOK and API; estimated only for the scripted test model (labelled) | ✅ | |
+| Token screen: plan, remaining credits, low-credit warning, usage chart (+table), ledger | ✅ | |
+| Agent API keys: create (shown once), rotate, revoke, per-key rate limit, usage, last used | ✅ | |
+| `/api/v1/generate` for agents, metered and rate limited | ✅ | |
+| Owner admin console: overview, users (grant, credits, suspend, sign out, workspaces), plans editor, audit log | ✅ | |
+| Hash-chained, append-only audit log with verification | ✅ | |
+| MFA, trusted devices | ⬜ | |
+| Normal (chat) mode | ⬜ | the current model cannot hold a conversation; COOK is the home mode |
+| Admin: service restart, backups and restore, log search, config centre, notifications | ⬜ | |
+| JARVIS / ASTON / FRIDAY / DARWIN / ROBIN registry with heartbeats | 🟡 | they can be issued API keys; no heartbeat or registry service exists |

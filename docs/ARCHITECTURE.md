@@ -101,3 +101,28 @@ Every place that shows the model reports `ModelAdapter.info()`, which contains
 both `product` (`INFINITY HYPER 5.5`) and `implementation` (for example
 `infinity-neural-core (original weights, trained in this project)` or
 `scripted (test double — not a language model)`). The two are never blurred.
+
+## Platform layer (`infinity/platform`, served by `infinity/server/app.py`)
+
+```
+browser ──cookie+CSRF──▶ FastAPI ──▶ Auth (scrypt, sessions, throttling)
+                              │ ──▶ Billing.entitlement(user)  ← plans (DB) + subscription + ledger balance
+                              │        └─ COOK / API allowed?  (402 with a reason if not)
+                              │ ──▶ RuntimeHub.get(user) ──▶ per-user Runtime ──▶ Agent (shared INFINITY HYPER 5.5 model)
+                              │        └─ on task end: usage_events + ledger charge (idempotency key = task id)
+agents ──Bearer inf_…──▶ /api/v1/generate ──▶ Keys.authenticate → rate limit → entitlement → model → meter + charge
+provider ──HMAC──▶ /api/billing/webhook ──▶ verify signature → match amount/currency to plan → activate + allocate
+owner ──▶ /api/admin/* (owner-only, reasons required) ──▶ Audit (hash chain; DB triggers forbid UPDATE/DELETE)
+```
+
+| Table | Purpose |
+|---|---|
+| `users`, `auth_sessions`, `login_attempts` | accounts, hashed session tokens with a CSRF token each, throttling |
+| `plans` | plan catalogue (single source after seeding) |
+| `subscriptions`, `payments` | lifecycle, verified payments, refunds and failures |
+| `ledger` | append-only credits (allocation, usage, adjustment, refund); unique idempotency keys |
+| `usage_events` | per-request token counts (exact/estimated flag, source, key) |
+| `api_keys` | sha256 of each key, prefix, scopes, rate limit, counters |
+| `audit_log` | hash-chained privileged actions |
+
+Schema changes are numbered migrations (`infinity/platform/db.py`).

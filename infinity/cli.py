@@ -8,7 +8,8 @@
     infinity agent         --workspace PATH --model neural:runs/hyper-5.5-tiny --mode code --task "..."
     infinity rollback      --workspace PATH --session ID
     infinity memory        show|export|delete-session|delete-note|wipe|trust|untrust ...
-    infinity studio        [--workspace PATH] [--permission ask] [--port 8765]
+    infinity admin         create-owner --email you@example.com | users | grant-plan --email E --plan pro | audit-verify
+    infinity studio        [--port 8765] [--no-registration]
 """
 
 from __future__ import annotations
@@ -201,6 +202,45 @@ def cmd_memory(args) -> int:
     return 0
 
 
+def cmd_admin(args) -> int:
+    import getpass
+
+    from .platform import AuthError, BillingError, Platform
+
+    p = Platform(args.platform_db)
+    try:
+        if args.action == "create-owner":
+            if p.auth.owner_exists():
+                print("an owner account already exists", file=sys.stderr)
+                return 1
+            if not args.email:
+                print("--email is required", file=sys.stderr)
+                return 2
+            pw = getpass.getpass("Owner password (min 10 chars): ")
+            if pw != getpass.getpass("Repeat password: "):
+                print("passwords do not match", file=sys.stderr)
+                return 1
+            u = p.auth.create_user(args.email, pw, "owner")
+            print(f"owner account created: {u.email} (id {u.id})")
+        elif args.action == "users":
+            for r in p.db.all("SELECT id, email, role, status, created_at FROM users ORDER BY id"):
+                print(f"{r['id']:>4}  {r['role']:<5}  {r['status']:<9}  {r['email']}")
+        elif args.action == "grant-plan":
+            owner = p.db.one("SELECT id FROM users WHERE role='owner'")
+            u = p.auth.by_email(args.email or "")
+            if not owner or not u:
+                print("need an owner account and an existing --email user", file=sys.stderr)
+                return 1
+            sub = p.billing.owner_grant(u.id, args.plan, owner["id"], args.reason or "granted from CLI")
+            print(f"granted {args.plan} to {u.email} until {sub['current_period_end']:.0f}")
+        elif args.action == "audit-verify":
+            print(json.dumps(p.audit.verify()))
+    except (AuthError, BillingError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_studio(args) -> int:
     from .server.app import main as studio_main
 
@@ -273,6 +313,14 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("value", nargs="?", default="")
     m.add_argument("--db", default=None)
     m.set_defaults(fn=cmd_memory)
+    ad = sub.add_parser("admin", help="owner account and platform administration")
+    ad.add_argument("action", choices=["create-owner", "users", "grant-plan", "audit-verify"])
+    ad.add_argument("--email", default=None)
+    ad.add_argument("--plan", default="plus", choices=["plus", "pro", "max"])
+    ad.add_argument("--reason", default=None)
+    ad.add_argument("--platform-db", default=None)
+    ad.set_defaults(fn=cmd_admin)
+
     st = sub.add_parser("studio", help="start the INFINITY STUDIO dashboard (local only)", add_help=False)
     st.add_argument("rest", nargs=argparse.REMAINDER)
     st.set_defaults(fn=cmd_studio)
