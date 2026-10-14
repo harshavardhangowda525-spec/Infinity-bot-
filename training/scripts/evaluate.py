@@ -60,8 +60,9 @@ def main() -> int:
 
         from infinity.agent.models import load_model
 
-        if kind == "neural" and not Path(arg).is_absolute():
-            a.model = f"neural:{ROOT / arg}"
+        if kind == "neural":  # resolve the checkpoint and the optional adapter against the project root
+            parts = [str(q) if Path(q).is_absolute() else str(ROOT / q) for q in arg.split("::") if q]
+            a.model = "neural:" + "::".join(parts)
         model = load_model(a.model)
     cases = load_cases(ROOT / a.cases)[: a.limit]
     print(f"evaluating {model.info().get('product')} on {len(cases)} cases…")
