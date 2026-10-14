@@ -8,9 +8,12 @@ export const date = (unix: number | null | undefined) => (unix ? new Date(unix *
 export const day = (unix: number) => new Date(unix * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 /** The loaded model's real name: open models by their own label, never as INFINITY HYPER 5.5. */
-export function modelName(m: { state: string; family?: string; product?: string; step?: number } | null | undefined): string {
+export function modelName(
+  m: { state: string; family?: string; product?: string; step?: number; variant?: string } | null | undefined,
+): string {
   if (!m || m.state !== "ready") return "No model loaded";
   if (m.family === "open-model") return m.product ?? "Open model";
+  if (m.variant === "fine-tuned") return `INFINITY HYPER 5.5 — Fine-Tuned · base step ${m.step}`;
   return `INFINITY HYPER 5.5 · step ${m.step}`;
 }
 

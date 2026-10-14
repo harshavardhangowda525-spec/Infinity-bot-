@@ -16,6 +16,7 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Trained prototype checkpoint (5.8M params, 6.1M tokens) | ✅ | `docs/TRAINING_REPORT.md`. Produces code-shaped text only |
 | Model good enough to drive the agent | ⬜ | tool-use SFT reached 100% valid actions but 0/30 live repairs; see `docs/FINETUNE_REPORT.md` |
 | Tool-use fine-tuning pipeline (runtime-verified expert data, masked loss, context extension, LM rehearsal, lineage) | ✅ | `infinity sft generate/train`, `tests/test_sft_bench.py` |
+| **INFINITY HYPER 5.5 — Fine-Tuned**: LoRA adapters on the frozen original. sha256-pinned to the base, never merged, base verified unchanged after training, selectable next to the original | ✅ | `infinity sft train --lora`, `bench run --adapter`, `tests/test_lora.py` |
 | Benchmark suite: lm perplexity, protocol validity, live repair; recorded with checkpoint hash | ✅ | `infinity bench run/list`; Intelligence view |
 | Explicit model promotion gated on recorded benchmarks | ✅ | `infinity model promote` (nothing promoted yet) |
 | Hardware audit and model-size recommendation | ✅ | `infinity audit` |

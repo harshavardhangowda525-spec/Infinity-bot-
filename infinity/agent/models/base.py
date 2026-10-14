@@ -101,15 +101,17 @@ class NeuralCoreModel(ModelAdapter):
 
     name = "infinity-neural-core"
 
-    def __init__(self, checkpoint: str, device: str = "cpu", temperature: float = 0.7, seed: int | None = None) -> None:
+    def __init__(self, checkpoint: str, device: str = "cpu", temperature: float = 0.7, seed: int | None = None,
+                 adapter: str | None = None) -> None:
         try:
             from ...core.inference import InferenceEngine, SamplingConfig
         except ImportError as e:  # torch missing
             raise ModelUnavailable(f"PyTorch is required for the neural core: {e}")
         try:
-            self.engine = InferenceEngine(checkpoint, device=device)
+            self.engine = InferenceEngine(checkpoint, device=device, adapter=adapter)
         except Exception as e:
-            raise ModelUnavailable(f"could not load checkpoint {checkpoint!r}: {e}")
+            what = f"adapter {adapter!r} on checkpoint {checkpoint!r}" if adapter else f"checkpoint {checkpoint!r}"
+            raise ModelUnavailable(f"could not load {what}: {e}")
         self._Sampling = SamplingConfig
         self.temperature = temperature
         self.seed = seed
@@ -136,11 +138,12 @@ class NeuralCoreModel(ModelAdapter):
 
 
 def load_model(spec: str) -> ModelAdapter:
-    """``neural:<checkpoint dir or run dir>``, ``scripted:<json list file>``, or
-    ``hf:<HF id or folder>[::<adapter folder>]`` for an open model (not HYPER 5.5)."""
+    """``neural:<checkpoint>[::<adapter folder>]`` (INFINITY HYPER 5.5, optionally Fine-Tuned),
+    ``scripted:<json list file>``, or ``hf:<HF id or folder>[::<adapter folder>]`` for an open model."""
     kind, _, arg = spec.partition(":")
     if kind == "neural":
-        return NeuralCoreModel(arg)
+        ckpt, _, adapter = arg.partition("::")
+        return NeuralCoreModel(ckpt, adapter=adapter or None)
     if kind == "scripted":
         return ScriptedModel.from_file(arg)
     if kind == "hf":

@@ -91,8 +91,8 @@ describe("modelPillText", () => {
 
 describe("open models are never shown as INFINITY HYPER 5.5", () => {
   it("labels the pill with the open model's own name", () => {
-    const s = { model: { state: "ready", family: "open-model", product: "Qwen2.5-Coder 0.5B Instruct + INFINITY adapter" } } as unknown as Status;
-    expect(modelPillText(s).text).toBe("Qwen2.5-Coder 0.5B Instruct + INFINITY adapter (LOCAL)");
+    const s = { model: { state: "ready", family: "open-model", product: "Qwen2.5-Coder 0.5B Instruct — Fine-Tuned" } } as unknown as Status;
+    expect(modelPillText(s).text).toBe("Qwen2.5-Coder 0.5B Instruct — Fine-Tuned (LOCAL)");
     expect(modelPillText(s).text).not.toContain("HYPER");
   });
 
@@ -113,8 +113,36 @@ describe("open models are never shown as INFINITY HYPER 5.5", () => {
     expect(screen.getByRole("radio", { name: "Chat" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByPlaceholderText("Message INFINITY BOT…")).toBeTruthy();
     expect(screen.getByRole("group", { name: "Open models (not HYPER 5.5)" })).toBeTruthy();
-    const untrained = screen.getByRole("option", { name: "Qwen2.5-Coder 0.5B Instruct + adapter (not trained yet)" }) as HTMLOptionElement;
+    const untrained = screen.getByRole("option", { name: "Qwen2.5-Coder 0.5B Instruct — Fine-Tuned (not trained yet)" }) as HTMLOptionElement;
     expect(untrained.disabled).toBe(true);
     expect((screen.getByLabelText("Model") as HTMLSelectElement).value).toBe("open:qwen");
+  });
+});
+
+describe("INFINITY HYPER 5.5 — Fine-Tuned", () => {
+  it("is listed separately from the original and selected by adapter name", () => {
+    const amp = { current: 0 };
+    render(
+      <CommandDock
+        mode="code" onMode={() => {}} onSubmit={() => {}} onCancel={() => {}} busy={false} disabledReason={null}
+        model={{ state: "ready", variant: "fine-tuned", adapter_name: "hyper-ft", checkpoint: "/c", step: 1500 }}
+        checkpoints={[{ path: "/c", run: "hyper-5.5-tiny", step: 1500, parameters: 1, metrics: {} }]}
+        hyperAdapters={[
+          { name: "hyper-ft", label: "INFINITY HYPER 5.5 — Fine-Tuned", base_checkpoint: "/c", base_present: true, base_step: 1500, trained_steps: 10, eval_loss_before: 1, eval_loss_after: 0.5 },
+          { name: "orphan", label: "INFINITY HYPER 5.5 — Fine-Tuned", base_checkpoint: "/gone", base_present: false, base_step: 1, trained_steps: 1, eval_loss_before: null, eval_loss_after: null },
+        ]}
+        onSelectModel={() => {}} onAttach={() => {}} workspaceName={null} taskText={null} onListening={() => {}} amplitude={amp}
+      />,
+    );
+    expect(screen.getByRole("group", { name: "INFINITY HYPER 5.5 (original)" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "INFINITY HYPER 5.5 — Fine-Tuned (LoRA)" })).toBeTruthy();
+    expect((screen.getByLabelText("Model") as HTMLSelectElement).value).toBe("hyper-adapter:hyper-ft");
+    const orphan = screen.getByRole("option", { name: "HYPER 5.5 — Fine-Tuned · orphan (base checkpoint missing)" }) as HTMLOptionElement;
+    expect(orphan.disabled).toBe(true);
+  });
+
+  it("pill names the fine-tuned version distinctly", () => {
+    const s = { model: { state: "ready", variant: "fine-tuned", step: 1500, product: "INFINITY HYPER 5.5 — Fine-Tuned" } } as unknown as Status;
+    expect(modelPillText(s).text).toBe("INFINITY HYPER 5.5 — Fine-Tuned · base step 1500 (LOCAL)");
   });
 });

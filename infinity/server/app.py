@@ -29,7 +29,7 @@ from ..agent.checkpoints import CheckpointStore, list_sessions
 from ..agent.permissions import BINARY_EXTS, IGNORED_DIRS, PathError, is_sensitive_path
 from ..agent.project import detect_project
 from ..platform import AuthError, BillingError, KeyError_, Platform, User
-from .runtime import RuntimeHub, find_checkpoints, open_models
+from .runtime import RuntimeHub, find_checkpoints, hyper_adapters, open_models
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]", "testserver"}
 COOKIE = "infinity_session"
@@ -50,6 +50,7 @@ class WorkspaceIn(BaseModel):
 class ModelIn(BaseModel):
     checkpoint: str | None = None
     open_model: str | None = Field(default=None, max_length=100)
+    hyper_adapter: str | None = Field(default=None, max_length=100)
 
 
 class ChatMessage(BaseModel):
@@ -328,15 +329,20 @@ def create_app(hub: RuntimeHub, platform: Platform, static_dir: Path | None = No
     @app.get("/api/models")
     def models(user: User = Depends(user_dep)):
         return {"active": hub.model_status(), "checkpoints": find_checkpoints(hub.base_dir),
-                "open_models": open_models(hub.base_dir), "can_switch": user.is_owner}
+                "hyper_adapters": hyper_adapters(hub.base_dir), "open_models": open_models(hub.base_dir),
+                "can_switch": user.is_owner}
 
     @app.post("/api/model")
     def set_model(body: ModelIn, request: Request, user: User = Depends(owner_write)):
-        if bool(body.checkpoint) == bool(body.open_model):
-            raise HTTPException(422, "give exactly one of checkpoint or open_model")
-        target = body.checkpoint or f"open:{body.open_model}"
+        if sum(bool(x) for x in (body.checkpoint, body.open_model, body.hyper_adapter)) != 1:
+            raise HTTPException(422, "give exactly one of checkpoint, hyper_adapter or open_model")
+        target = body.checkpoint or (f"open:{body.open_model}" if body.open_model else f"hyper-adapter:{body.hyper_adapter}")
         try:
-            if body.open_model:
+            if body.hyper_adapter:
+                if body.hyper_adapter not in {e["name"] for e in hyper_adapters(hub.base_dir)}:
+                    raise HTTPException(404, "unknown adapter")
+                hub.load_hyper_adapter(body.hyper_adapter, remember=True)
+            elif body.open_model:
                 if body.open_model not in {e["id"] for e in open_models(hub.base_dir)}:
                     raise HTTPException(404, "unknown open model")
                 hub.load_open(body.open_model, remember=True)

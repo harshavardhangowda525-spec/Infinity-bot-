@@ -139,6 +139,36 @@ def _save_checkpoint(model, optimizer, scaler, step: int, cfg: dict, ckpt_root: 
     return final
 
 
+def base_files(base_path: str) -> Path | None:
+    """Folder holding the base model's files: a local folder, or the Hugging Face cache snapshot."""
+    p = Path(base_path)
+    if p.is_dir():
+        return p
+    try:
+        from huggingface_hub import snapshot_download
+
+        return Path(snapshot_download(repo_id=base_path, local_files_only=True))
+    except Exception:
+        return None
+
+
+def fingerprint_files(folder: Path | None) -> dict[str, str]:
+    """sha256 of every file (symlinks followed) in the base model folder."""
+    import hashlib
+
+    if folder is None:
+        return {}
+    out = {}
+    for f in sorted(folder.rglob("*")):
+        if f.is_file():
+            h = hashlib.sha256()
+            with open(f, "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 20), b""):
+                    h.update(chunk)
+            out[str(f.relative_to(folder))] = h.hexdigest()
+    return out
+
+
 def _versions() -> dict:
     import peft
     import torch
@@ -200,6 +230,11 @@ def train(cfg: dict, root: Path, resume: bool = False, smoke: bool = False, log=
     trainable = sum(p_.numel() for p_ in model.parameters() if p_.requires_grad)
     total = sum(p_.numel() for p_ in model.parameters())
     log(f"trainable LoRA parameters: {trainable:,} of {total:,} ({100 * trainable / total:.2f}%)")
+    base_dir = base_files(base_path)
+    base_before = fingerprint_files(base_dir)
+    finetuned_name = cfg["model_label"] + " — Fine-Tuned"
+    log(f"base model (original, read-only): {cfg['base_model']} · {len(base_before)} files fingerprinted"
+        + ("" if base_before else " — WARNING: base files not found locally, cannot verify"))
 
     params = [p_ for p_ in model.parameters() if p_.requires_grad]
     optimizer = torch.optim.AdamW(params, lr=float(t["learning_rate"]), weight_decay=float(t["weight_decay"]))
@@ -261,6 +296,9 @@ def train(cfg: dict, root: Path, resume: bool = False, smoke: bool = False, log=
     p["log"].parent.mkdir(parents=True, exist_ok=True)
     p["ckpt"].mkdir(parents=True, exist_ok=True)
     logf = open(p["log"], "a", encoding="utf-8")
+    logf.write(json.dumps({"event": "start", "base_model": cfg["base_model"], "base_role": "original, read-only (frozen)",
+                           "output": finetuned_name, "method": "LoRA (adapter saved separately, not merged)",
+                           "base_files_sha256": base_before, "resume_from_step": step}) + "\n")
     model.train()
     t0 = time.time()
     start_step = step
@@ -320,6 +358,12 @@ def train(cfg: dict, root: Path, resume: bool = False, smoke: bool = False, log=
             log(f"interrupted — checkpoint saved: {ck}. Rerun with --resume to continue.")
         logf.close()
         raise
+    base_after = fingerprint_files(base_dir)
+    if base_after != base_before:
+        logf.close()
+        raise RuntimeError(f"ORIGINAL BASE MODEL FILES CHANGED during training: "
+                           f"{sorted(k for k in set(base_before) | set(base_after) if base_before.get(k) != base_after.get(k))}")
+    logf.write(json.dumps({"event": "end", "base_unchanged_after_training": bool(base_before), "steps": step}) + "\n")
     logf.close()
 
     # Export the final adapter (atomic; an existing export is never overwritten).
@@ -329,14 +373,19 @@ def train(cfg: dict, root: Path, resume: bool = False, smoke: bool = False, log=
     tmp = out.with_name(f".tmp-{out.name}")
     shutil.rmtree(tmp, ignore_errors=True)
     model.save_pretrained(tmp)
-    manifest = {"base_model": cfg["base_model"], "model_label": cfg["model_label"], "run_name": cfg["run_name"],
+    manifest = {"name": finetuned_name, "base_model": cfg["base_model"], "base_role": "original, read-only",
+                "model_label": cfg["model_label"], "run_name": cfg["run_name"], "merged_into_base": False,
+                "base_files_sha256": base_before, "base_unchanged_after_training": bool(base_before),
                 "steps": step, "final": last, "config": cfg, "versions": _versions(),
                 "data_report": str(p["data"] / "report.json"),
-                "note": "LoRA adapter for an open model. It is NOT INFINITY HYPER 5.5."}
+                "note": "LoRA adapter for an open model. It is NOT INFINITY HYPER 5.5 and not HYPER 5.5 — Fine-Tuned."}
     (tmp / "training_manifest.json").write_text(json.dumps(manifest, indent=2))
     os.replace(tmp, out)
     log(f"adapter exported: {out}")
-    result = {"adapter": str(out), "steps": step, "final": last, "device": device, "precision": prec}
+    result = {"adapter": str(out), "name": finetuned_name, "steps": step, "final": last, "device": device,
+              "precision": prec, "base_unchanged": bool(base_before)}
+    log(f"original base model verified unchanged ({len(base_before)} files, sha256)" if base_before
+        else "base model files could not be located for verification")
 
     if smoke:  # reload the export and check it reproduces the in-memory model
         from peft import PeftModel

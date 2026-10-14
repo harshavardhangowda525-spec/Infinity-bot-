@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { Checkpoint, DockMode, ModelStatus, OpenModel } from "../lib/types";
+import type { Checkpoint, DockMode, HyperAdapter, ModelStatus, OpenModel } from "../lib/types";
 
 export const DOCK_MODES: { id: DockMode; label: string; hint: string }[] = [
   { id: "chat", label: "Chat", hint: "Normal chat — a plain conversation with the loaded model (no files, no tools)" },
@@ -37,6 +37,7 @@ export default function CommandDock({
   model,
   checkpoints,
   openModels = [],
+  hyperAdapters = [],
   onSelectModel,
   onAttach,
   workspaceName,
@@ -54,6 +55,7 @@ export default function CommandDock({
   model: ModelStatus | undefined;
   checkpoints: Checkpoint[];
   openModels?: OpenModel[];
+  hyperAdapters?: HyperAdapter[];
   onSelectModel: (value: string) => void;
   onAttach: () => void;
   workspaceName: string | null;
@@ -226,26 +228,48 @@ export default function CommandDock({
         </label>
         <select
           id="model-select"
-          value={model?.state !== "ready" ? "" : model.family === "open-model" ? `open:${model.id}` : model.checkpoint}
+          value={
+            model?.state !== "ready"
+              ? ""
+              : model.family === "open-model"
+                ? `open:${model.id}`
+                : model.variant === "fine-tuned"
+                  ? `hyper-adapter:${model.adapter_name}`
+                  : model.checkpoint
+          }
           onChange={(e) => e.target.value && onSelectModel(e.target.value)}
-          disabled={busy || (checkpoints.length === 0 && openModels.length === 0)}
+          disabled={busy || (checkpoints.length === 0 && openModels.length === 0 && hyperAdapters.length === 0)}
           title="Model (INFINITY HYPER 5.5 checkpoints and open models)"
           className="max-w-[230px] truncate rounded-lg border border-white/5 bg-black/30 px-2 py-1.5 text-xs text-slate-300"
         >
           {model?.state !== "ready" && (
             <option value="">{checkpoints.length || openModels.length ? "Select model" : "No checkpoint trained"}</option>
           )}
-          {checkpoints.map((c) => (
-            <option key={c.path} value={c.path}>
-              HYPER 5.5 · {c.run} · step {c.step}
-            </option>
-          ))}
+          {checkpoints.length > 0 && (
+            <optgroup label="INFINITY HYPER 5.5 (original)">
+              {checkpoints.map((c) => (
+                <option key={c.path} value={c.path}>
+                  HYPER 5.5 · {c.run} · step {c.step}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {hyperAdapters.length > 0 && (
+            <optgroup label="INFINITY HYPER 5.5 — Fine-Tuned (LoRA)">
+              {hyperAdapters.map((a) => (
+                <option key={a.name} value={`hyper-adapter:${a.name}`} disabled={!a.base_present}>
+                  HYPER 5.5 — Fine-Tuned · {a.name}
+                  {a.base_present ? "" : " (base checkpoint missing)"}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {openModels.length > 0 && (
             <optgroup label="Open models (not HYPER 5.5)">
               {openModels.map((o) => (
                 <option key={o.id} value={`open:${o.id}`} disabled={o.adapter_present === false}>
                   {o.label}
-                  {o.adapter ? (o.adapter_present ? " + INFINITY adapter" : " + adapter (not trained yet)") : ""}
+                  {o.adapter ? (o.adapter_present ? " — Fine-Tuned" : " — Fine-Tuned (not trained yet)") : ""}
                 </option>
               ))}
             </optgroup>

@@ -41,7 +41,7 @@ def test_prompts(path: Path) -> set[str]:
 
 def adapter_label(cfg: dict) -> str:
     """The product label the bot shows when this adapter is loaded (see HFModel.info)."""
-    return cfg["model_label"] + " + INFINITY adapter"
+    return cfg["model_label"] + " — Fine-Tuned"
 
 
 def prepare(cfg: dict, root: Path, tokenizer=None, log=print) -> dict:

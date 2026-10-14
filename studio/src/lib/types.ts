@@ -17,11 +17,25 @@ export interface ModelStatus {
   metrics?: Record<string, unknown>;
   /** "open-model" for Hugging Face models (never INFINITY HYPER 5.5); absent for HYPER 5.5. */
   family?: string;
+  /** HYPER 5.5 only: "original" or "fine-tuned" (original weights + LoRA adapter, not merged). */
+  variant?: "original" | "fine-tuned";
+  adapter_name?: string;
   id?: string;
   base?: string;
   adapter?: string | null;
   device?: string;
   switch_error?: string;
+}
+
+export interface HyperAdapter {
+  name: string;
+  label: string;
+  base_checkpoint: string;
+  base_present: boolean;
+  base_step: number;
+  trained_steps: number | null;
+  eval_loss_before: number | null;
+  eval_loss_after: number | null;
 }
 
 export interface OpenModel {

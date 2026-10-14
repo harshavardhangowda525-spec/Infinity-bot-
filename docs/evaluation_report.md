@@ -36,7 +36,7 @@ requires the model to actually name itself. HYPER's score went from 1/24 to 0/24
 
 ```bat
 python training/scripts/evaluate.py --model hf:Qwen/Qwen2.5-Coder-0.5B-Instruct --label baseline --repair 10
-python training/scripts/evaluate.py --model "hf:Qwen/Qwen2.5-Coder-0.5B-Instruct::adapters/infinity-hyper-5-5/qwen-coder-0.5b-combined" --label combined --repair 10
+python training/scripts/evaluate.py --model "hf:Qwen/Qwen2.5-Coder-0.5B-Instruct::adapters/open-models/qwen-coder-0.5b-combined" --label combined --repair 10
 python training/scripts/evaluate.py --compare baseline combined
 ```
 

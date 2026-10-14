@@ -12,7 +12,7 @@ import UpgradeOverlay from "./components/UpgradeOverlay";
 import { api } from "./lib/api";
 import { modelName, num } from "./lib/format";
 import { useStore } from "./lib/store";
-import type { ChatTurn, Checkpoint, DockMode, Me, OpenModel } from "./lib/types";
+import type { ChatTurn, Checkpoint, DockMode, HyperAdapter, Me, OpenModel } from "./lib/types";
 import AdminView from "./views/AdminView";
 import IntelligenceView from "./views/IntelligenceView";
 import KeysView from "./views/KeysView";
@@ -30,6 +30,7 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
   const [mode, setMode] = useState<DockMode>(me.entitlement.cook ? "code" : "chat");
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [openModels, setOpenModels] = useState<OpenModel[]>([]);
+  const [hyperAdapters, setHyperAdapters] = useState<HyperAdapter[]>([]);
   const [chat, setChat] = useState<ChatTurn[]>([]);
   const [chatWaiting, setChatWaiting] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -52,6 +53,7 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
       (m) => {
         setCheckpoints(m.checkpoints);
         setOpenModels(m.open_models ?? []);
+        setHyperAdapters(m.hyper_adapters ?? []);
       },
       () => setCheckpoints([]),
     );
@@ -297,6 +299,7 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
           model={status?.model}
           checkpoints={checkpoints}
           openModels={openModels}
+          hyperAdapters={hyperAdapters}
           onSelectModel={selectModel}
           onAttach={() => (ent.cook ? setLauncher(true) : setUpgrade(true))}
           workspaceName={workspaceName}

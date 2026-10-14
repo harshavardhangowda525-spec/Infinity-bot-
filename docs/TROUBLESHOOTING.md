@@ -62,7 +62,7 @@ base model from huggingface.co (about 1 GB). Check your internet connection. To 
 offline, download the model folder once and set `"base"` in `configs/open-models.json`
 to that folder (relative to the project root). The current model stays loaded when a switch fails.
 
-**The adapter entry is greyed out.** Its folder under `adapters/infinity-hyper-5-5/` doesn't
+**The adapter entry is greyed out.** Its folder under `adapters/open-models/` doesn't
 exist yet. Train it first, or point `"adapter"` at the folder you trained.
 
 **Training is slow.** On a CPU each step can take tens of seconds; the script prints the

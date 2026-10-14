@@ -13,7 +13,7 @@
       "id": "qwen-coder-0.5b-combined",
       "label": "Qwen2.5-Coder 0.5B Instruct",
       "base": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
-      "adapter": "adapters/infinity-hyper-5-5/qwen-coder-0.5b-combined",
+      "adapter": "adapters/open-models/qwen-coder-0.5b-combined",
       "context_tokens": 4096,
       "license": "Apache-2.0 base + your own LoRA adapter"
     }

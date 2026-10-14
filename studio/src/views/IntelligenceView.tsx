@@ -43,7 +43,7 @@ export default function IntelligenceView() {
     <div className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto grid max-w-6xl gap-4 px-4 pb-32 pt-16 sm:px-6 lg:grid-cols-3">
         <section className="glass rounded-2xl p-5" aria-labelledby="model-h">
-          <h2 id="model-h" className="text-[11px] font-semibold tracking-[0.2em] text-slate-400">{m.state === "ready" && m.family === "open-model" ? m.product : "INFINITY HYPER 5.5"}</h2>
+          <h2 id="model-h" className="text-[11px] font-semibold tracking-[0.2em] text-slate-400">{m.state === "ready" && m.product ? m.product : "INFINITY HYPER 5.5"}</h2>
           {m.state === "ready" ? (
             <>
               <Row k="Implementation" v={m.implementation ?? ""} />

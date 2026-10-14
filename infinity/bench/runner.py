@@ -73,8 +73,12 @@ class BenchStore:
 
 def _info(model: NeuralCoreModel) -> dict:
     eng = model.engine
-    return {"checkpoint": str(eng.path), "run": eng.run_cfg.name, "step": eng.manifest["step"],
+    info = {"checkpoint": str(eng.path), "run": eng.run_cfg.name, "step": eng.manifest["step"],
             "model_sha256": eng.manifest["sha256"]["model.pt"], "context_length": eng.run_cfg.model.context_length}
+    if eng.adapter_dir is not None:  # INFINITY HYPER 5.5 — Fine-Tuned: recorded separately from the original
+        info.update(checkpoint=f"{eng.path}::{eng.adapter_dir}", run=f"{eng.run_cfg.name}+lora:{eng.adapter_dir.name}",
+                    adapter_sha256=eng.adapter_conf["adapter_sha256"], product=eng.adapter_conf["name"])
+    return info
 
 
 @torch.no_grad()
@@ -158,8 +162,8 @@ def bench_repair(model: NeuralCoreModel, n: int = 30, seed: int = 1337, max_step
 
 def run(checkpoint: str, suites: list[str], store_path: str | Path, data_dir: str | Path = "runs/data",
         sft_dir: str | Path = "runs/sft", n_repair: int = 30, n_protocol: int = 200, repair_seed: int = 1337,
-        log=print) -> list[dict]:
-    model = NeuralCoreModel(checkpoint, temperature=0.0)
+        log=print, adapter: str | None = None) -> list[dict]:
+    model = NeuralCoreModel(checkpoint, temperature=0.0, adapter=adapter)
     info = _info(model)
     store = BenchStore(store_path)
     results = []
@@ -174,6 +178,8 @@ def run(checkpoint: str, suites: list[str], store_path: str | Path, data_dir: st
         else:
             raise ValueError(f"unknown suite {suite!r}")
         dur = time.time() - t0
+        if "adapter_sha256" in info:
+            cfg = {**cfg, "adapter_sha256": info["adapter_sha256"]}
         rid = store.add(suite, info, cfg, metrics, dur)
         log(f"[{suite}] {json.dumps(metrics)} ({dur:.1f}s, result #{rid})")
         results.append({"id": rid, "suite": suite, "metrics": metrics, "config": cfg, **info})

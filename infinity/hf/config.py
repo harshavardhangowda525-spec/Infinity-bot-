@@ -17,7 +17,7 @@ DEFAULTS = {
                  "eval_interval": 25, "eval_examples": 20, "checkpoint_interval": 25,
                  "gradient_checkpointing": True, "precision": "auto", "device": "auto",
                  "checkpoint_dir": "training/checkpoints", "log_dir": "training/logs",
-                 "adapter_dir": "adapters/infinity-hyper-5-5"},
+                 "adapter_dir": "adapters/open-models"},  # HYPER 5.5 adapters live in adapters/infinity-hyper-5-5
     "lora": {"r": 16, "alpha": 32, "dropout": 0.05,
              "target_modules": ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]},
 }

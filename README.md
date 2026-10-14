@@ -77,9 +77,20 @@ infinity bench run --checkpoint runs/my-sft --sft runs/sft-v2      # lm, protoco
 infinity model promote --checkpoint runs/my-sft/checkpoints/step_001000 --reason "..."   # explicit; needs results
 ```
 
+## INFINITY HYPER 5.5 — Fine-Tuned (LoRA adapter on the original)
+
+```bash
+infinity sft train --lora --base runs/hyper-5.5-tiny --data runs/sft-v2 --name hyper-5.5-finetuned --context 512 --rank 16 --alpha 32
+infinity bench run --checkpoint runs/hyper-5.5-tiny --adapter adapters/infinity-hyper-5-5/hyper-5.5-finetuned --sft runs/sft-v2
+```
+
+- The original checkpoint is frozen and sha256-verified before and after training.
+- The adapter is saved separately and never merged.
+- The original stays selectable as the baseline and rollback. See `docs/training_guide.md` §0.
+
 ## Open model option (Qwen2.5-Coder 0.5B + your LoRA adapter)
 
-A second, clearly labelled brain next to INFINITY HYPER 5.5. It is an open model that can
+A separate, clearly labelled brain next to INFINITY HYPER 5.5, shown as "Qwen2.5-Coder 0.5B Instruct — Fine-Tuned", never as HYPER 5.5. It is an open model that can
 already chat and code a little, and you can fine-tune it on your own computer. HYPER 5.5
 is unchanged.
 

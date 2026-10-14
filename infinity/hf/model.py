@@ -29,7 +29,7 @@ class HFModel(ModelAdapter):
     def __init__(self, base: str, adapter: str | None = None, label: str | None = None,
                  context_tokens: int = 4096, device: str = "auto", dtype: str = "auto",
                  temperature: float = 0.2, seed: int | None = None, base_dir: Path | None = None,
-                 merge_adapter: bool = True, model_id: str | None = None) -> None:
+                 merge_adapter: bool = False, model_id: str | None = None) -> None:
         try:
             import torch
             from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -63,10 +63,11 @@ class HFModel(ModelAdapter):
                 raise ModelUnavailable(f"peft is required to load adapter {adapter!r}: {e}")
             try:
                 model = PeftModel.from_pretrained(model, _resolve(adapter, base_dir))
-                if merge_adapter:
+                if merge_adapter:  # in memory only; never written back. Off by default (adapter stays separate)
                     model = model.merge_and_unload()
             except Exception as e:
                 raise ModelUnavailable(f"could not load adapter {adapter!r}: {type(e).__name__}: {e}")
+        self.merged = bool(adapter and merge_adapter)
         self.model = model.to(self.device).eval()
         self.load_seconds = round(time.time() - t0, 1)
         limit = getattr(self.model.config, "max_position_embeddings", context_tokens) or context_tokens
@@ -77,10 +78,12 @@ class HFModel(ModelAdapter):
 
     # ------------------------------------------------------------- interface
     def info(self) -> dict:
-        product = self.label + (" + INFINITY adapter" if self.adapter_ref else "")
+        product = self.label + (" — Fine-Tuned" if self.adapter_ref else "")
         return {
             "product": product,
             "family": "open-model",
+            "variant": "fine-tuned" if self.adapter_ref else "original",
+            "adapter_merged": self.merged,
             "id": self.model_id,
             "implementation": "Hugging Face Transformers — open model, not INFINITY HYPER 5.5",
             "base": self.base_ref,

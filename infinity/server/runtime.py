@@ -37,6 +37,27 @@ def open_models(base: Path) -> list[dict]:
     return out
 
 
+def hyper_adapters(base: Path) -> list[dict]:
+    """LoRA adapters for the original model (INFINITY HYPER 5.5 — Fine-Tuned) under adapters/infinity-hyper-5-5/."""
+    import json
+
+    out = []
+    for conf_path in sorted((base / "adapters" / "infinity-hyper-5-5").glob("*/adapter_config.json")):
+        try:
+            conf = json.loads(conf_path.read_text(encoding="utf-8"))
+        except ValueError:
+            continue
+        if conf.get("format") != "infinity-lora-v1":
+            continue  # e.g. an open-model (PEFT) adapter
+        ck = Path(conf["base_checkpoint"])
+        ck = ck if ck.is_absolute() else base / ck
+        out.append({"name": conf_path.parent.name, "label": conf.get("name"), "base_checkpoint": str(ck),
+                    "base_present": ck.exists(), "base_step": conf.get("base_step"),
+                    "trained_steps": conf.get("trained_steps"), "eval_loss_before": conf.get("eval_loss_before"),
+                    "eval_loss_after": conf.get("eval_loss_after"), "path": str(conf_path.parent)})
+    return out
+
+
 def find_checkpoints(base: Path) -> list[dict]:
     """All verified-looking checkpoints under <base>/runs/*/checkpoints."""
     out = []
@@ -303,6 +324,26 @@ class RuntimeHub:
         if remember:
             self._remember({"kind": "neural", "checkpoint": checkpoint})
 
+    def load_hyper_adapter(self, name: str, remember: bool = False) -> None:
+        """INFINITY HYPER 5.5 — Fine-Tuned: the original checkpoint with a LoRA adapter on top (never merged).
+        On failure the current model stays loaded (HYPER 5.5 is loaded if nothing was)."""
+        if self.any_busy():
+            raise RuntimeError("cannot switch model while a task is running")
+        entry = next((e for e in hyper_adapters(self.base_dir) if e["name"] == name), None)
+        if entry is None:
+            raise KeyError(name)
+        try:
+            model = NeuralCoreModel(entry["base_checkpoint"], adapter=entry["path"])
+        except ModelUnavailable as e:
+            self.open_error = f"{entry['label']} ({name}): {e}"
+            if self.model is None:
+                self.autoload_latest(ignore_selection=True)
+            raise ModelUnavailable(f"{e} — kept the current model") from e
+        self.open_error = None
+        self.set_model(model, None)
+        if remember:
+            self._remember({"kind": "hyper-adapter", "name": name})
+
     def load_open(self, model_id: str, remember: bool = False) -> None:
         """Switch to an open model from configs/open-models.json.
 
@@ -342,6 +383,9 @@ class RuntimeHub:
                 choice = _json.loads(sel.read_text(encoding="utf-8"))
                 if choice.get("kind") == "open":
                     self.load_open(choice["id"])
+                    return
+                if choice.get("kind") == "hyper-adapter":
+                    self.load_hyper_adapter(choice["name"])
                     return
                 if choice.get("kind") == "neural" and Path(choice["checkpoint"]).exists():
                     self.load_model(choice["checkpoint"])

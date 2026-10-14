@@ -129,7 +129,7 @@ def test_prepare_train_resume_and_export(tmp_path, tiny, tok):
     assert (root / "training/data-tiny/report.md").exists()
     train_rows = [json.loads(l) for l in (root / "training/data-tiny/train.jsonl").read_text().splitlines()]
     chat_rows = [r for r in train_rows if r["domain"] == "chat"]
-    assert all(r["messages"][0]["role"] == "system" and "INFINITY adapter" in r["messages"][0]["content"] for r in chat_rows)
+    assert all(r["messages"][0]["role"] == "system" and "— Fine-Tuned" in r["messages"][0]["content"] for r in chat_rows)
 
     assert plan(cfg, root, tok, log=lambda m: None)["train_examples"] == rep["train"]["examples"]
     smoke = train(cfg, root, smoke=True, log=lambda m: None)
@@ -143,15 +143,39 @@ def test_prepare_train_resume_and_export(tmp_path, tiny, tok):
     second = train(cfg, root, resume=True, log=lambda m: None)
     assert second["steps"] == 3 and (ck / "step_000003").exists() and (ck / "step_000001").exists()
     assert first["adapter"] != second["adapter"]  # an existing export is never overwritten
-    manifest = json.loads((root / "adapters/infinity-hyper-5-5/tiny-test/training_manifest.json").read_text())
+    manifest = json.loads((root / "adapters/open-models/tiny-test/training_manifest.json").read_text())
     assert "NOT INFINITY HYPER 5.5" in manifest["note"]
     log = [json.loads(l) for l in (root / "training/logs/tiny-test.jsonl").read_text().splitlines()]
-    assert [r["step"] for r in log] == [1, 2, 3] and all("loss" in r and "lr" in r for r in log)
+    steps = [r for r in log if "event" not in r]
+    assert [r["step"] for r in steps] == [1, 2, 3] and all("loss" in r and "lr" in r for r in steps)
+    starts = [r for r in log if r.get("event") == "start"]
+    assert starts and starts[0]["base_role"].startswith("original") and starts[0]["output"].endswith("— Fine-Tuned")
+    assert starts[0]["base_files_sha256"] and all(r["base_unchanged_after_training"] for r in log if r.get("event") == "end")
+    assert manifest["merged_into_base"] is False and manifest["base_unchanged_after_training"] is True
+    assert second["base_unchanged"] and second["name"] == "Tiny test model (random weights) — Fine-Tuned"
 
     # The trained adapter loads through the same path the bot uses.
-    m = HFModel(str(root / "training/tiny-model"), "adapters/infinity-hyper-5-5/tiny-test", label="Tiny",
+    m = HFModel(str(root / "training/tiny-model"), "adapters/open-models/tiny-test", label="Tiny",
                 context_tokens=512, base_dir=root, temperature=0)
-    assert m.info()["product"] == "Tiny + INFINITY adapter"
+    assert m.info()["product"] == "Tiny — Fine-Tuned" and m.info()["variant"] == "fine-tuned"
+    from peft import PeftModel
+
+    assert isinstance(m.model, PeftModel) and m.info()["adapter_merged"] is False  # adapter kept separate
+
+
+def test_training_fails_if_base_files_change(tmp_path, tiny, tok, monkeypatch):
+    from infinity.hf import train as T
+    from infinity.hf.prepare import prepare
+
+    root = _project(tmp_path, tiny)
+    cfg = load_config(root / "training/configs/tiny-test.yaml", {"data": {"tool_tasks_train": 0, "train_domains": ["chat"]},
+                                                                 "training": {"max_steps": 1}})
+    prepare(cfg, root, tok, log=lambda m: None)
+    calls = iter([{"model.safetensors": "aaa"}, {"model.safetensors": "bbb"}])
+    monkeypatch.setattr(T, "fingerprint_files", lambda folder: next(calls))
+    with pytest.raises(RuntimeError, match="ORIGINAL BASE MODEL FILES CHANGED"):
+        T.train(cfg, root, log=lambda m: None)
+    assert not (root / "adapters").exists()  # nothing exported from a run that touched the base
 
 
 def test_oom_is_reported_without_deleting_checkpoints(tmp_path, tiny, tok, monkeypatch):

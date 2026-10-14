@@ -72,6 +72,11 @@ export default function ModelStatus({ status, connected }: { status: Status | nu
                     <Row label="Base model" value={m.base ?? ""} />
                     <Row label="Adapter" value={m.adapter ?? "none"} />
                   </>
+                ) : m.variant === "fine-tuned" ? (
+                  <>
+                    <Row label="Original (frozen)" value={`INFINITY HYPER 5.5 · ${m.run} · step ${m.step}`} />
+                    <Row label="Adapter (LoRA, not merged)" value={m.adapter_name ?? ""} />
+                  </>
                 ) : (
                   <Row label="Run · step" value={`${m.run} · ${m.step}`} />
                 )}

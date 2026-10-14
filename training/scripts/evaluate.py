@@ -3,7 +3,7 @@
     # baseline: the open model before fine-tuning
     python training/scripts/evaluate.py --model hf:Qwen/Qwen2.5-Coder-0.5B-Instruct --label baseline
     # the same model + a trained adapter
-    python training/scripts/evaluate.py --model "hf:Qwen/Qwen2.5-Coder-0.5B-Instruct::adapters/infinity-hyper-5-5/qwen-coder-0.5b-combined" --label combined
+    python training/scripts/evaluate.py --model "hf:Qwen/Qwen2.5-Coder-0.5B-Instruct::adapters/open-models/qwen-coder-0.5b-combined" --label combined
     # INFINITY HYPER 5.5 itself, for reference
     python training/scripts/evaluate.py --model neural:runs/hyper-5.5-tiny --label hyper-tiny
     # compare two saved reports

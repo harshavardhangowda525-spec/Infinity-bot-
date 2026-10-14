@@ -46,8 +46,18 @@ def sample_next(logits: torch.Tensor, cfg: SamplingConfig, history: list[int], g
 
 
 class InferenceEngine:
-    def __init__(self, checkpoint: str, device: str = "cpu") -> None:
-        model, tok, run_cfg, _, manifest, path = load_checkpoint(checkpoint, device=device)
+    def __init__(self, checkpoint: str, device: str = "cpu", adapter: str | None = None) -> None:
+        self.adapter_dir = None
+        self.adapter_conf = None
+        if adapter:  # original weights + LoRA adapter on top (never merged)
+            from pathlib import Path
+
+            from .lora import load_with_adapter
+
+            model, tok, run_cfg, _, manifest, path, conf = load_with_adapter(checkpoint, adapter, device=device)
+            self.adapter_dir, self.adapter_conf = Path(adapter), conf
+        else:
+            model, tok, run_cfg, _, manifest, path = load_checkpoint(checkpoint, device=device)
         model.eval()
         self.model = model
         self.tokenizer = tok
@@ -57,8 +67,22 @@ class InferenceEngine:
         self.device = device
 
     def info(self) -> dict:
+        if self.adapter_conf is not None:
+            c = self.adapter_conf
+            return {
+                "product": c["name"], "variant": "fine-tuned",
+                "implementation": "infinity-neural-core original weights (frozen) + LoRA adapter (not merged)",
+                "run": self.run_cfg.name, "checkpoint": str(self.path), "base_checkpoint": str(self.path),
+                "adapter": str(self.adapter_dir), "adapter_name": self.adapter_dir.name,
+                "step": self.manifest["step"], "parameters": self.manifest["parameters"],
+                "adapter_parameters": sum(p.numel() for n, p in self.model.named_parameters() if ".lora_" in n),
+                "context_length": self.run_cfg.model.context_length,
+                "tokenizer_fingerprint": self.manifest["tokenizer_fingerprint"],
+                "metrics": {k: c.get(k) for k in ("trained_steps", "eval_loss_before", "eval_loss_after")},
+            }
         return {
             "product": f"{MODEL_FAMILY} {MODEL_VERSION}",
+            "variant": "original",
             "implementation": "infinity-neural-core (original weights, trained in this project)",
             "run": self.run_cfg.name,
             "checkpoint": str(self.path),

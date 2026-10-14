@@ -138,3 +138,20 @@ Licence: Qwen2.5-Coder 0.5B Instruct is published under Apache-2.0. **Re-check t
 card before use.** It could not be fetched from the build environment.
 
 See `docs/training_guide.md`, `docs/dataset_guide.md`, `docs/evaluation_report.md` and `docs/cook_security.md`.
+
+## 7. Preservation requirement (2026-10-14)
+
+The owner required INFINITY HYPER 5.5 to stay intact, with fine-tuning done only through
+separate adapters. The trained version is called **INFINITY HYPER 5.5 — Fine-Tuned**.
+
+- **A (new).** LoRA for the original model.
+  - Code: `infinity/core/lora.py` and `infinity/sft/lora_train.py`.
+  - Train with `infinity sft train --lora`.
+  - Adapters go to `adapters/infinity-hyper-5-5/` and are pinned to the base checkpoint's sha256.
+  - They are never merged, and are verified before and after training.
+- **B (kept).** The Qwen adapter keeps an honest name, "Qwen2.5-Coder 0.5B Instruct — Fine-Tuned".
+  - It lives in `adapters/open-models/`.
+  - It is no longer merged at load time, and its base files are sha256-checked before and after training.
+  - It is not called "INFINITY HYPER 5.5 — Fine-Tuned", because that would credit HYPER 5.5 with Qwen's work.
+
+Details: `docs/training_guide.md` §0.

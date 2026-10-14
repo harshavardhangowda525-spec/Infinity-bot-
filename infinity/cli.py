@@ -271,13 +271,22 @@ def cmd_sft(args) -> int:
 
         tok = BPETokenizer.load(Path(args.tokenizer))
         print(json.dumps(generate(args.out, tok, args.context, args.train, args.eval, args.seed), indent=2))
+    elif args.lora:
+        from .sft.lora_train import lora_finetune
+
+        stop = threading.Event()
+        signal.signal(signal.SIGINT, lambda s, f: stop.set())
+        print(json.dumps(lora_finetune(args.base, args.data, args.name, root=".", steps=args.steps, context=args.context,
+                                       batch_size=args.batch_size, lr=args.lr or 2e-3, r=args.rank,
+                                       alpha=args.alpha, stop_flag=stop, lm_mix=args.lm_mix, lm_data=args.lm_data,
+                                       eval_every=args.eval_every), indent=2))
     else:
         from .sft.finetune import finetune
 
         stop = threading.Event()
         signal.signal(signal.SIGINT, lambda s, f: stop.set())
         print(json.dumps(finetune(args.base, args.data, args.out, steps=args.steps, context=args.context,
-                                  batch_size=args.batch_size, lr=args.lr, stop_flag=stop, lm_mix=args.lm_mix,
+                                  batch_size=args.batch_size, lr=args.lr or 1e-3, stop_flag=stop, lm_mix=args.lm_mix,
                                   lm_data=args.lm_data, eval_every=args.eval_every), indent=2))
     return 0
 
@@ -290,7 +299,7 @@ def cmd_bench(args) -> int:
             print(f"#{r['id']:<4} {r['suite']:<9} {r['run']} step {r['step']:<6} {json.dumps(r['metrics'])[:160]}")
         return 0
     run(args.checkpoint, args.suites.split(","), args.store, args.data, args.sft, n_repair=args.n_repair,
-        n_protocol=args.n_protocol, repair_seed=args.repair_seed)
+        n_protocol=args.n_protocol, repair_seed=args.repair_seed, adapter=args.adapter)
     return 0
 
 
@@ -435,10 +444,15 @@ def build_parser() -> argparse.ArgumentParser:
     sf.add_argument("--data", default="runs/sft")
     sf.add_argument("--steps", type=int, default=1200)
     sf.add_argument("--batch-size", type=int, default=16)
-    sf.add_argument("--lr", type=float, default=1e-3)
+    sf.add_argument("--lr", type=float, default=None, help="default 1e-3 (full fine-tune) or 2e-3 (--lora)")
     sf.add_argument("--lm-mix", type=float, default=0.25, help="fraction of steps that also train on pretraining text (limits forgetting)")
     sf.add_argument("--lm-data", default="runs/data")
     sf.add_argument("--eval-every", type=int, default=250)
+    sf.add_argument("--lora", action="store_true",
+                    help="train a LoRA adapter on the frozen original (INFINITY HYPER 5.5 — Fine-Tuned) instead of a full fine-tune")
+    sf.add_argument("--name", default="hyper-5.5-finetuned", help="adapter folder name under adapters/infinity-hyper-5-5/")
+    sf.add_argument("--rank", type=int, default=8, help="LoRA rank")
+    sf.add_argument("--alpha", type=float, default=16.0, help="LoRA alpha")
     sf.set_defaults(fn=cmd_sft)
 
     be = sub.add_parser("bench", help="run / list recorded benchmarks")
@@ -451,6 +465,7 @@ def build_parser() -> argparse.ArgumentParser:
     be.add_argument("--n-repair", type=int, default=30)
     be.add_argument("--n-protocol", type=int, default=200)
     be.add_argument("--repair-seed", type=int, default=1337, help="1337 = reported test set; use another seed for checkpoint selection")
+    be.add_argument("--adapter", default=None, help="evaluate INFINITY HYPER 5.5 — Fine-Tuned: LoRA adapter folder on top of --checkpoint")
     be.set_defaults(fn=cmd_bench)
 
     mo = sub.add_parser("model", help="promote a benchmarked checkpoint (explicit, recorded)")
