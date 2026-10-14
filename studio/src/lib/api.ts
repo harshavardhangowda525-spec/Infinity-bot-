@@ -1,5 +1,5 @@
 import type {
-  AdminOverview, AdminUser, Intelligence, AgentEvent, ApiKey, AuditEvent, BillingMe, Catalog, ChatTurn, Checkpoint, CheckoutResult, HyperAdapter, Me, Mode, OpenModel,
+  AdminOverview, AdminUser, Intelligence, AgentEvent, ApiKey, AuditEvent, BillingMe, Catalog, ChatResult, ChatTurn, Checkpoint, Conversation, ConversationSummary, CheckoutResult, HyperAdapter, Me, Mode, OpenModel,
   Permission, Plan, Project, RecentProject, Status, TreeNode,
 } from "./types";
 
@@ -65,11 +65,17 @@ export const api = {
             : { checkpoint: value },
       ),
     }),
-  chat: (messages: ChatTurn[], max_new_tokens = 512) =>
-    request<{ reply: string; model: { product: string; family: string }; usage: { tokens_in: number; tokens_out: number; credits_charged: number } }>(
-      "/api/chat",
-      { method: "POST", body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), max_new_tokens }) },
-    ),
+  chat: (messages: ChatTurn[], conversation_id: number | null = null, max_new_tokens = 512) =>
+    request<ChatResult>("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), conversation_id, max_new_tokens }),
+    }),
+  chatCancel: () => request<{ cancelled: boolean }>("/api/chat/cancel", { method: "POST" }),
+  conversations: () => request<{ conversations: ConversationSummary[] }>("/api/conversations"),
+  conversation: (id: number) => request<Conversation>(`/api/conversations/${id}`),
+  renameConversation: (id: number, title: string) =>
+    request<ConversationSummary>(`/api/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
+  deleteConversation: (id: number) => request<{ deleted: boolean }>(`/api/conversations/${id}`, { method: "DELETE" }),
   projects: () => request<{ recent: RecentProject[]; current: string | null }>("/api/projects"),
   project: () => request<Project>("/api/project"),
   setWorkspace: (path: string, permission?: Permission) =>

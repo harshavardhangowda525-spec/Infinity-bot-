@@ -13,8 +13,13 @@ export function modelName(
 ): string {
   if (!m || m.state !== "ready") return "No model loaded";
   if (m.family === "open-model") return m.product ?? "Open model";
-  if (m.variant === "fine-tuned") return `INFINITY HYPER 5.5 — Fine-Tuned · base step ${m.step}`;
-  return `INFINITY HYPER 5.5 · step ${m.step}`;
+  if (m.variant === "fine-tuned") return "Infinity Hyper 5.5 — Fine-Tuned";
+  return "Infinity Hyper 5.5";
+}
+
+/** Display form of a model label recorded by the server ("INFINITY HYPER 5.5 …" → "Infinity Hyper 5.5 …"). */
+export function displayModel(label: string | null | undefined): string {
+  return (label ?? "").replace(/INFINITY HYPER 5\.5/g, "Infinity Hyper 5.5");
 }
 
 /** Allowance text that never invents a number. */

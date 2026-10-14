@@ -7,10 +7,10 @@ type Tab = "overview" | "users" | "plans" | "audit";
 
 function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
-      <div className="text-[10px] tracking-[0.18em] text-slate-500">{label}</div>
-      <div className="mt-1 text-xl font-semibold text-slate-100">{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
+    <div className="rounded-xl border border-line bg-hover p-3">
+      <div className="text-[10px] tracking-[0.18em] text-muted">{label}</div>
+      <div className="mt-1 text-xl font-semibold text-fg">{value}</div>
+      {sub && <div className="mt-0.5 text-[11px] text-muted">{sub}</div>}
     </div>
   );
 }
@@ -22,7 +22,7 @@ function useReasoned() {
   const [extra, setExtra] = useState("");
   const [error, setError] = useState<string | null>(null);
   const dialog = pending && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       <form
         role="dialog"
         aria-modal="true"
@@ -41,31 +41,31 @@ function useReasoned() {
           }
         }}
       >
-        <h3 className="text-xs font-semibold tracking-[0.16em] text-slate-100">{pending.title.toUpperCase()}</h3>
+        <h3 className="text-xs font-semibold tracking-[0.16em] text-fg">{pending.title.toUpperCase()}</h3>
         {pending.extra === "delta" && (
-          <label className="mt-3 block text-xs text-slate-400">Credit change (negative to deduct)
-            <input type="number" required value={extra} onChange={(e) => setExtra(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-slate-100" />
+          <label className="mt-3 block text-xs text-muted">Credit change (negative to deduct)
+            <input type="number" required value={extra} onChange={(e) => setExtra(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-fg" />
           </label>
         )}
         {pending.extra === "plan" && (
-          <label className="mt-3 block text-xs text-slate-400">Plan
-            <select required value={extra} onChange={(e) => setExtra(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-slate-100">
+          <label className="mt-3 block text-xs text-muted">Plan
+            <select required value={extra} onChange={(e) => setExtra(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-fg">
               <option value="">Select…</option><option value="plus">PLUS</option><option value="pro">PRO</option><option value="max">MAX</option>
             </select>
           </label>
         )}
         {pending.extra === "roots" && (
-          <label className="mt-3 block text-xs text-slate-400">Authorised workspace roots (one absolute path per line; empty = none)
-            <textarea rows={3} value={extra} onChange={(e) => setExtra(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-slate-100" />
+          <label className="mt-3 block text-xs text-muted">Authorised workspace roots (one absolute path per line; empty = none)
+            <textarea rows={3} value={extra} onChange={(e) => setExtra(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-xs text-fg" />
           </label>
         )}
-        <label className="mt-3 block text-xs text-slate-400">Reason (recorded in the audit log)
-          <input required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-slate-100" />
+        <label className="mt-3 block text-xs text-muted">Reason (recorded in the audit log)
+          <input required minLength={3} value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-fg" />
         </label>
-        {error && <p role="alert" className="mt-2 text-xs text-red-300">{error}</p>}
+        {error && <p role="alert" className="mt-2 text-xs text-bad">{error}</p>}
         <div className="mt-4 flex gap-2">
-          <button className="rounded-lg bg-cyan-glow/90 px-3 py-1.5 text-xs font-semibold text-obsidian">Confirm</button>
-          <button type="button" onClick={() => setPending(null)} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs">Cancel</button>
+          <button className="rounded-lg bg-cyan-glow/90 px-3 py-1.5 text-xs font-semibold text-white">Confirm</button>
+          <button type="button" onClick={() => setPending(null)} className="rounded-lg border border-line px-3 py-1.5 text-xs">Cancel</button>
         </div>
       </form>
     </div>
@@ -96,17 +96,17 @@ function PlanEditor({ plan, onSaved }: { plan: Plan; onSaved: () => void }) {
     }
   };
   const field = (label: string, v: string, set: (s: string) => void, hint: string) => (
-    <label className="text-xs text-slate-400">{label}
+    <label className="text-xs text-muted">{label}
       <input type="number" min={0} value={v} onChange={(e) => set(e.target.value)} placeholder="not configured"
-        className="mt-1 block w-full rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-sm text-slate-100" />
-      <span className="text-[10px] text-slate-600">{hint}</span>
+        className="mt-1 block w-full rounded-lg border border-line bg-surface-2 px-2.5 py-1.5 text-sm text-fg" />
+      <span className="text-[10px] text-muted/70">{hint}</span>
     </label>
   );
   return (
-    <div className="rounded-xl border border-white/5 p-4">
+    <div className="rounded-xl border border-line p-4">
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold tracking-[0.2em] text-slate-100">{plan.name}</h3>
-        <span className="text-xs text-slate-500">{inr(plan.monthly_price_inr)}/month · {allowance(plan.monthly_token_credits)}</span>
+        <h3 className="text-sm font-semibold tracking-[0.2em] text-fg">{plan.name}</h3>
+        <span className="text-xs text-muted">{inr(plan.monthly_price_inr)}/month · {allowance(plan.monthly_token_credits)}</span>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {field("Monthly price (₹)", price, setPrice, "existing subscribers keep their price")}
@@ -114,15 +114,15 @@ function PlanEditor({ plan, onSaved }: { plan: Plan; onSaved: () => void }) {
         {field("Max task steps", steps, setSteps, "empty = runtime default")}
         {field("API requests/min", rpm, setRpm, "empty = per-key limit only")}
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-300">
+      <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-fg/80">
         <label className="flex items-center gap-1.5"><input type="checkbox" checked={accepting} onChange={(e) => setAccepting(e.target.checked)} />Accepting new subscriptions</label>
         {Number(price) !== plan.monthly_price_inr && (
           <label className="flex items-center gap-1.5 text-amber-diag"><input type="checkbox" checked={confirmPrice} onChange={(e) => setConfirmPrice(e.target.checked)} />I confirm the price change</label>
         )}
-        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" className="min-w-[180px] flex-1 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5" />
-        <button onClick={save} disabled={reason.trim().length < 3} className="rounded-lg bg-cyan-glow/90 px-3 py-1.5 font-semibold text-obsidian disabled:opacity-30">Save</button>
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required)" className="min-w-[180px] flex-1 rounded-lg border border-line bg-surface-2 px-2.5 py-1.5" />
+        <button onClick={save} disabled={reason.trim().length < 3} className="rounded-lg bg-cyan-glow/90 px-3 py-1.5 font-semibold text-white disabled:opacity-30">Save</button>
       </div>
-      {msg && <p className="mt-2 text-xs text-slate-400">{msg}</p>}
+      {msg && <p className="mt-2 text-xs text-muted">{msg}</p>}
     </div>
   );
 }
@@ -159,16 +159,16 @@ export default function AdminView() {
 
   return (
     <div className="scroll-thin h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-4 pb-32 pt-16 sm:px-6">
+      <div className="mx-auto max-w-6xl px-4 pb-16 pt-6 sm:px-6">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="mr-3 text-xs font-semibold tracking-[0.25em] text-slate-200">ADMIN CONSOLE</h1>
+          <h1 className="mr-3 text-xs font-semibold tracking-[0.25em] text-fg">ADMIN CONSOLE</h1>
           {(["overview", "users", "plans", "audit"] as Tab[]).map((t) => (
             <button key={t} onClick={() => setTab(t)} aria-current={tab === t}
-              className={`rounded-lg px-3 py-1.5 text-xs capitalize ${tab === t ? "bg-cyan-glow/15 text-cyan-glow" : "text-slate-400 hover:bg-white/5"}`}>{t}</button>
+              className={`rounded-lg px-3 py-1.5 text-xs capitalize ${tab === t ? "bg-cyan-glow/15 text-cyan-glow" : "text-muted hover:bg-hover"}`}>{t}</button>
           ))}
-          <button onClick={load} className="ml-auto rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white">Refresh</button>
+          <button onClick={load} className="ml-auto rounded-lg border border-line px-2.5 py-1.5 text-xs text-muted hover:text-fg">Refresh</button>
         </div>
-        {error && <p role="alert" className="mt-3 text-sm text-red-300">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-sm text-bad">{error}</p>}
 
         {tab === "overview" && ov && (
           <div className="mt-4 space-y-4">
@@ -181,8 +181,8 @@ export default function AdminView() {
               <Metric label="TOKENS · 30D" value={num(ov.usage_30d.tokens_in + ov.usage_30d.tokens_out)} sub={`${num(ov.usage_30d.requests)} requests`} />
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="glass rounded-2xl p-4 text-xs text-slate-300">
-                <h2 className="mb-2 text-[10px] tracking-[0.18em] text-slate-500">SYSTEM</h2>
+              <div className="glass rounded-2xl p-4 text-xs text-fg/80">
+                <h2 className="mb-2 text-[10px] tracking-[0.18em] text-muted">SYSTEM</h2>
                 <p>Model: {ov.model.state === "ready" ? modelName(ov.model) : `unavailable — ${ov.model.reason}`}</p>
                 <p>Payment provider: {ov.payment_provider.configured ? "webhook configured" : "not connected (development mode)"}</p>
                 <p>Audit chain: {ov.audit_chain.ok ? `intact (${ov.audit_chain.checked} records)` : `BROKEN at record ${ov.audit_chain.broken_at}`}</p>
@@ -191,9 +191,9 @@ export default function AdminView() {
                 <p>Active COOK tasks: {ov.tasks.filter((t) => t.busy).length} running · {ov.tasks.length} sessions</p>
               </div>
               <div className="glass rounded-2xl p-4 text-xs">
-                <h2 className="mb-2 text-[10px] tracking-[0.18em] text-slate-500">RECENT SECURITY EVENTS</h2>
-                {ov.security.length === 0 ? <p className="text-slate-500">No failed privileged or login events.</p> : (
-                  <ul className="space-y-1">{ov.security.map((e) => <li key={e.id} className="text-red-300/90">{date(e.created_at)} — {e.action} {e.target ?? ""} {e.reason ? `(${e.reason})` : ""}</li>)}</ul>
+                <h2 className="mb-2 text-[10px] tracking-[0.18em] text-muted">RECENT SECURITY EVENTS</h2>
+                {ov.security.length === 0 ? <p className="text-muted">No failed privileged or login events.</p> : (
+                  <ul className="space-y-1">{ov.security.map((e) => <li key={e.id} className="text-bad">{date(e.created_at)} — {e.action} {e.target ?? ""} {e.reason ? `(${e.reason})` : ""}</li>)}</ul>
                 )}
               </div>
             </div>
@@ -203,32 +203,32 @@ export default function AdminView() {
         {tab === "users" && (
           <div className="mt-4">
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by e-mail" aria-label="Search users"
-              className="mb-3 w-full max-w-sm rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100" />
+              className="mb-3 w-full max-w-sm rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg" />
             <div className="glass scroll-thin overflow-x-auto rounded-2xl">
               <table className="w-full min-w-[900px] text-left text-sm">
-                <thead className="text-xs text-slate-500"><tr className="border-b border-white/5">
+                <thead className="text-xs text-muted"><tr className="border-b border-line">
                   {["ID", "E-mail", "Role", "Status", "Plan", "Credits", "Usage 30d", "Last active", "Actions"].map((h) => <th key={h} className="p-3 font-normal">{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {(users ?? []).map((u) => (
-                    <tr key={u.id} className="border-b border-white/5 last:border-0 text-slate-300">
+                    <tr key={u.id} className="border-b border-line last:border-0 text-fg/80">
                       <td className="p-3 text-xs">{u.id}</td>
                       <td className="p-3">{u.email}</td>
                       <td className="p-3 text-xs">{u.role}</td>
-                      <td className={`p-3 text-xs ${u.status === "active" ? "text-emerald-300" : "text-red-300"}`}>{u.status}</td>
+                      <td className={`p-3 text-xs ${u.status === "active" ? "text-ok" : "text-bad"}`}>{u.status}</td>
                       <td className="p-3 text-xs uppercase">{u.plan}{u.subscription_status && u.subscription_status !== "active" ? ` (${u.subscription_status})` : ""}</td>
                       <td className="p-3 font-mono text-xs">{num(u.balance)}</td>
                       <td className="p-3 font-mono text-xs">{num(u.usage_30d)}</td>
-                      <td className="p-3 text-xs text-slate-500">{date(u.last_active_at)}</td>
+                      <td className="p-3 text-xs text-muted">{date(u.last_active_at)}</td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-1 text-[11px]">
-                          <button className="rounded border border-white/10 px-2 py-0.5 hover:text-white" onClick={() => ask({ title: `Grant plan to ${u.email}`, extra: "plan", run: wrap((r, x) => api.adminGrant(u.id, x, r)) })}>Grant plan</button>
-                          <button className="rounded border border-white/10 px-2 py-0.5 hover:text-white" onClick={() => ask({ title: `Adjust credits for ${u.email}`, extra: "delta", run: wrap((r, x) => api.adminCredits(u.id, Number(x), r)) })}>Credits</button>
-                          <button className="rounded border border-white/10 px-2 py-0.5 hover:text-white" onClick={() => ask({ title: `Workspace roots for ${u.email}`, extra: "roots", run: wrap((r, x) => api.adminRoots(u.id, x.split("\n").map((s) => s.trim()).filter(Boolean), r)) })}>Workspaces</button>
+                          <button className="rounded border border-line px-2 py-0.5 hover:text-fg" onClick={() => ask({ title: `Grant plan to ${u.email}`, extra: "plan", run: wrap((r, x) => api.adminGrant(u.id, x, r)) })}>Grant plan</button>
+                          <button className="rounded border border-line px-2 py-0.5 hover:text-fg" onClick={() => ask({ title: `Adjust credits for ${u.email}`, extra: "delta", run: wrap((r, x) => api.adminCredits(u.id, Number(x), r)) })}>Credits</button>
+                          <button className="rounded border border-line px-2 py-0.5 hover:text-fg" onClick={() => ask({ title: `Workspace roots for ${u.email}`, extra: "roots", run: wrap((r, x) => api.adminRoots(u.id, x.split("\n").map((s) => s.trim()).filter(Boolean), r)) })}>Workspaces</button>
                           {u.role !== "owner" && (
                             <>
-                              <button className="rounded border border-white/10 px-2 py-0.5 hover:text-white" onClick={() => ask({ title: `Revoke sessions of ${u.email}`, run: wrap((r) => api.adminRevokeSessions(u.id, r)) })}>Sign out</button>
-                              <button className={`rounded border px-2 py-0.5 ${u.status === "active" ? "border-red-300/30 text-red-300" : "border-emerald-300/30 text-emerald-300"}`}
+                              <button className="rounded border border-line px-2 py-0.5 hover:text-fg" onClick={() => ask({ title: `Revoke sessions of ${u.email}`, run: wrap((r) => api.adminRevokeSessions(u.id, r)) })}>Sign out</button>
+                              <button className={`rounded border px-2 py-0.5 ${u.status === "active" ? "border-bad/30 text-bad" : "border-ok/30 text-ok"}`}
                                 onClick={() => ask({ title: `${u.status === "active" ? "Suspend" : "Restore"} ${u.email}`, run: wrap((r) => api.adminStatus(u.id, u.status === "active" ? "suspended" : "active", r)) })}>
                                 {u.status === "active" ? "Suspend" : "Restore"}
                               </button>
@@ -240,35 +240,35 @@ export default function AdminView() {
                   ))}
                 </tbody>
               </table>
-              {users && users.length === 0 && <p className="p-4 text-sm text-slate-500">No matching accounts.</p>}
+              {users && users.length === 0 && <p className="p-4 text-sm text-muted">No matching accounts.</p>}
             </div>
           </div>
         )}
 
         {tab === "plans" && (
           <div className="mt-4 space-y-3">
-            <p className="text-xs text-slate-500">Every change needs a reason and is audited. Price changes need explicit confirmation and never alter existing subscribers' price.</p>
+            <p className="text-xs text-muted">Every change needs a reason and is audited. Price changes need explicit confirmation and never alter existing subscribers' price.</p>
             {(plans ?? []).map((p) => <PlanEditor key={p.id} plan={p} onSaved={load} />)}
           </div>
         )}
 
         {tab === "audit" && audit && (
           <div className="mt-4">
-            <p className={`mb-3 text-xs ${audit.chain.ok ? "text-emerald-300" : "text-red-300"}`}>
+            <p className={`mb-3 text-xs ${audit.chain.ok ? "text-ok" : "text-bad"}`}>
               Hash chain {audit.chain.ok ? `verified (${audit.chain.checked} records)` : "verification FAILED"}
             </p>
             <div className="glass scroll-thin overflow-x-auto rounded-2xl">
               <table className="w-full min-w-[720px] text-left text-xs">
-                <thead className="text-slate-500"><tr className="border-b border-white/5">{["Time", "Actor", "Action", "Target", "Result", "Reason"].map((h) => <th key={h} className="p-2.5 font-normal">{h}</th>)}</tr></thead>
+                <thead className="text-muted"><tr className="border-b border-line">{["Time", "Actor", "Action", "Target", "Result", "Reason"].map((h) => <th key={h} className="p-2.5 font-normal">{h}</th>)}</tr></thead>
                 <tbody>
                   {audit.events.map((e) => (
-                    <tr key={e.id} className="border-b border-white/5 last:border-0 text-slate-300">
-                      <td className="p-2.5 text-slate-500">{date(e.created_at)}</td>
+                    <tr key={e.id} className="border-b border-line last:border-0 text-fg/80">
+                      <td className="p-2.5 text-muted">{date(e.created_at)}</td>
                       <td className="p-2.5">{e.actor_id ?? "system"}</td>
                       <td className="p-2.5 font-mono">{e.action}</td>
                       <td className="p-2.5">{e.target}</td>
-                      <td className={`p-2.5 ${e.success ? "text-emerald-300" : "text-red-300"}`}>{e.success ? "ok" : "failed"}</td>
-                      <td className="max-w-[320px] truncate p-2.5 text-slate-400" title={e.reason ?? ""}>{e.reason}</td>
+                      <td className={`p-2.5 ${e.success ? "text-ok" : "text-bad"}`}>{e.success ? "ok" : "failed"}</td>
+                      <td className="max-w-[320px] truncate p-2.5 text-muted" title={e.reason ?? ""}>{e.reason}</td>
                     </tr>
                   ))}
                 </tbody>

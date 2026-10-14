@@ -38,15 +38,15 @@ function Node({ node, depth, onOpen, selected, changed }: {
         disabled={node.sensitive}
         title={node.sensitive ? "Secrets file — hidden from preview and from the agent" : node.path}
         className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[13px] ${
-          selected === node.path ? "bg-cyan-glow/10 text-white" : "text-slate-300 hover:bg-white/5"
+          selected === node.path ? "bg-cyan-glow/10 text-fg" : "text-fg/80 hover:bg-hover"
         } ${node.sensitive ? "cursor-not-allowed opacity-40" : ""}`}
         style={{ paddingLeft: 6 + depth * 14 }}
       >
-        <span className={node.type === "dir" ? "text-cyan-glow/70" : "text-slate-500"}>{node.type === "dir" ? Icon.folder : Icon.file}</span>
+        <span className={node.type === "dir" ? "text-cyan-glow/70" : "text-muted"}>{node.type === "dir" ? Icon.folder : Icon.file}</span>
         <span className="truncate">{node.name}</span>
         {isChanged && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-amber-diag" title="Modified in this task" />}
       </button>
-      {error && <p className="px-4 text-xs text-red-300">{error}</p>}
+      {error && <p className="px-4 text-xs text-bad">{error}</p>}
       {open && children && (
         <ul>
           {children.map((c) => (
@@ -82,10 +82,10 @@ export default function FileExplorer({ workspace, onOpen, selected, changed, ref
     load();
   }, [load, refreshKey]);
 
-  if (!workspace) return <p className="p-4 text-sm text-slate-500">No project selected.</p>;
-  if (error) return <p className="p-4 text-sm text-red-300">{error}</p>;
-  if (!root) return <p className="p-4 text-sm text-slate-500">Loading…</p>;
-  if (!root.length) return <p className="p-4 text-sm text-slate-500">Empty directory.</p>;
+  if (!workspace) return <p className="p-4 text-sm text-muted">No project selected.</p>;
+  if (error) return <p className="p-4 text-sm text-bad">{error}</p>;
+  if (!root) return <p className="p-4 text-sm text-muted">Loading…</p>;
+  if (!root.length) return <p className="p-4 text-sm text-muted">Empty directory.</p>;
   return (
     <ul className="p-1.5" aria-label="Project files">
       {root.map((n) => (

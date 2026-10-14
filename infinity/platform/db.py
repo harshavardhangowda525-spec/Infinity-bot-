@@ -158,6 +158,30 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE INDEX idx_usage_user ON usage_events(user_id, created_at);
         """,
     ),
+    (
+        3,
+        # Normal-chat conversation history (per user; users can rename and delete their own).
+        """
+        CREATE TABLE conversations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          title TEXT NOT NULL,
+          created_at REAL NOT NULL,
+          updated_at REAL NOT NULL
+        );
+        CREATE INDEX idx_conversations_user ON conversations(user_id, updated_at);
+        CREATE TABLE conversation_messages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL,
+          role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+          content TEXT NOT NULL,
+          model TEXT,
+          created_at REAL NOT NULL
+        );
+        CREATE INDEX idx_conversation_messages ON conversation_messages(conversation_id, position);
+        """,
+    ),
 ]
 
 

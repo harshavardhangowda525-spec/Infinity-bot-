@@ -3,21 +3,21 @@ import { useEffect, useRef, useState } from "react";
 import { modelName } from "../lib/format";
 import type { Status } from "../lib/types";
 
-function Row({ label, value, tone = "text-slate-200" }: { label: string; value: string; tone?: string }) {
+function Row({ label, value, tone = "text-fg" }: { label: string; value: string; tone?: string }) {
   return (
     <div className="flex justify-between gap-6 py-1 text-xs">
-      <span className="text-slate-500">{label}</span>
+      <span className="text-muted">{label}</span>
       <span className={`text-right ${tone}`}>{value}</span>
     </div>
   );
 }
 
 export function modelPillText(status: Status | null): { text: string; tone: string } {
-  if (!status) return { text: "Runtime offline", tone: "text-red-300" };
+  if (!status) return { text: "Runtime offline", tone: "text-bad" };
   const m = status.model;
-  if (m.state === "loading") return { text: "Loading model…", tone: "text-slate-300" };
+  if (m.state === "loading") return { text: "Loading model…", tone: "text-fg/80" };
   if (m.state !== "ready") return { text: "No model · unavailable", tone: "text-amber-diag" };
-  return { text: `${modelName(m)} (LOCAL)`, tone: "text-slate-100" };
+  return { text: modelName(m), tone: "text-fg/80" };
 }
 
 /** Compact model pill that opens a status popover with real runtime facts only. */
@@ -45,28 +45,28 @@ export default function ModelStatus({ status, connected }: { status: Status | nu
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="glass flex max-w-[60vw] items-center gap-2 rounded-xl px-3 py-1.5 text-xs lg:max-w-[15vw] xl:max-w-[19vw]"
+        className="flex max-w-[52vw] items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-muted transition hover:bg-hover sm:max-w-[320px]"
       >
-        <span className="hidden text-slate-500 sm:inline">MODEL:</span>
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${status?.model.state === "ready" && connected ? "bg-ok" : "bg-warn"}`} aria-hidden />
         <span className={`truncate ${pill.tone}`}>{pill.text}</span>
       </button>
       <AnimatePresence>
         {open && (
-          <div className="absolute left-1/2 top-11 z-50 w-[min(360px,90vw)] -translate-x-1/2">
+          <div className="absolute right-0 top-10 z-50 w-[min(360px,90vw)]">
           <motion.div
             role="dialog"
             aria-label="Model and agent status"
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            className="glass-strong rounded-2xl popover p-4"
+            className="popover rounded-xl border border-line bg-surface p-4"
           >
-            <h3 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-slate-400">INTELLIGENCE</h3>
+            <h3 className="mb-2 text-xs font-semibold text-fg">Model</h3>
             <Row label="Model" value={m?.state === "ready" ? m.product ?? "" : "—"} />
             {m?.state === "ready" ? (
               <>
                 <Row label="Implementation" value={m.implementation ?? ""} />
-                <Row label="Locality" value="Local model connected" tone="text-emerald-300" />
+                <Row label="Locality" value="Local model connected" tone="text-ok" />
                 {m.family === "open-model" ? (
                   <>
                     <Row label="Base model" value={m.base ?? ""} />
@@ -88,17 +88,17 @@ export default function ModelStatus({ status, connected }: { status: Status | nu
               <Row label="Model" value={m?.state === "loading" ? "loading" : `Unavailable — ${m?.reason ?? "runtime offline"}`} tone="text-amber-diag" />
             )}
             {m?.switch_error && <Row label="Last switch failed" value={m.switch_error} tone="text-amber-diag" />}
-            <div className="my-2 border-t border-white/5" />
-            <Row label="Runtime" value={connected ? "connected" : "disconnected"} tone={connected ? "text-emerald-300" : "text-red-300"} />
-            <Row label="Agent" value={agentText} tone={agent?.awaiting_approval ? "text-amber-diag" : "text-slate-200"} />
+            <div className="my-2 border-t border-line" />
+            <Row label="Runtime" value={connected ? "connected" : "disconnected"} tone={connected ? "text-ok" : "text-bad"} />
+            <Row label="Agent" value={agentText} tone={agent?.awaiting_approval ? "text-amber-diag" : "text-fg"} />
             <Row label="Task" value={agent?.task ? `${agent.task.state}${agent.task.status ? ` · ${agent.task.status}` : ""}` : "none"} />
             <Row label="Permission mode" value={status?.permission ?? "—"} />
             <Row label="Remote providers" value="none (disabled by design)" />
             {status && status.recent_errors.length > 0 && (
               <>
-                <div className="my-2 border-t border-white/5" />
-                <h4 className="mb-1 text-[11px] tracking-wider text-slate-500">RECENT ERRORS</h4>
-                <ul className="scroll-thin max-h-28 space-y-1 overflow-auto text-[11px] text-red-300/90">
+                <div className="my-2 border-t border-line" />
+                <h4 className="mb-1 text-xs font-medium text-muted">Recent errors</h4>
+                <ul className="scroll-thin max-h-28 space-y-1 overflow-auto text-[11px] text-bad">
                   {status.recent_errors
                     .slice()
                     .reverse()

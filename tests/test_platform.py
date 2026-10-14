@@ -287,7 +287,7 @@ def test_migration_2_keeps_usage_rows_and_allows_chat(tmp_path, monkeypatch):
     old.conn.close()
     monkeypatch.undo()
     new = dbmod.PlatformDB(path)
-    assert [m["version"] for m in new.migrations()] == [1, 2]
+    assert [m["version"] for m in new.migrations()][:2] == [1, 2]
     rows = new.all("SELECT source, ref, tokens_in, tokens_out FROM usage_events")
     assert [dict(r) for r in rows] == [{"source": "cook", "ref": "task:1", "tokens_in": 5, "tokens_out": 7}]
     new.run("INSERT INTO usage_events (user_id, source, ref, tokens_in, tokens_out, exact, ok, created_at) "

@@ -35,24 +35,24 @@ export default function UsageChart({ usage }: { usage: UsageSummary }) {
 
   return (
     <figure className="m-0">
-      <div className="mb-2 flex items-center gap-4 text-xs text-slate-300">
+      <div className="mb-2 flex items-center gap-4 text-xs text-fg/80">
         <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4" style={{ background: IN }} />Tokens in</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 border-t-2 border-dashed" style={{ borderColor: OUT }} />Tokens out</span>
-        <button onClick={() => setTable(!table)} className="ml-auto rounded border border-white/10 px-2 py-0.5 text-[11px] text-slate-400 hover:text-white" aria-pressed={table}>
+        <button onClick={() => setTable(!table)} className="ml-auto rounded border border-line px-2 py-0.5 text-[11px] text-muted hover:text-fg" aria-pressed={table}>
           {table ? "Chart" : "Table"}
         </button>
       </div>
       {empty ? (
-        <p className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-slate-500">
+        <p className="flex h-[180px] items-center justify-center rounded-xl border border-dashed border-line text-sm text-muted">
           No usage recorded in the last {usage.days} days.
         </p>
       ) : table ? (
         <div className="scroll-thin max-h-[220px] overflow-auto">
           <table className="w-full text-xs">
-            <thead><tr className="text-slate-500"><th className="p-1 text-left font-normal">Day</th><th className="p-1 text-right font-normal">In</th><th className="p-1 text-right font-normal">Out</th></tr></thead>
+            <thead><tr className="text-muted"><th className="p-1 text-left font-normal">Day</th><th className="p-1 text-right font-normal">In</th><th className="p-1 text-right font-normal">Out</th></tr></thead>
             <tbody>
               {pts.filter((p) => p.tin || p.tout).map((p) => (
-                <tr key={p.day} className="border-t border-white/5 text-slate-300"><td className="p-1">{day(p.day)}</td><td className="p-1 text-right">{num(p.tin)}</td><td className="p-1 text-right">{num(p.tout)}</td></tr>
+                <tr key={p.day} className="border-t border-line text-fg/80"><td className="p-1">{day(p.day)}</td><td className="p-1 text-right">{num(p.tin)}</td><td className="p-1 text-right">{num(p.tout)}</td></tr>
               ))}
             </tbody>
           </table>
@@ -89,16 +89,16 @@ export default function UsageChart({ usage }: { usage: UsageSummary }) {
             )}
           </svg>
           {hover !== null && (
-            <div className="glass-strong popover pointer-events-none absolute top-0 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-200"
+            <div className="glass-strong popover pointer-events-none absolute top-0 rounded-lg px-2.5 py-1.5 text-[11px] text-fg"
               style={{ left: `${(x(hover) / W) * 100}%`, transform: `translateX(${hover > pts.length / 2 ? "-105%" : "5%"})` }}>
-              <div className="text-slate-400">{day(pts[hover].day)}</div>
+              <div className="text-muted">{day(pts[hover].day)}</div>
               <div>In: {num(pts[hover].tin)}</div>
               <div>Out: {num(pts[hover].tout)}</div>
             </div>
           )}
         </div>
       )}
-      <figcaption className="mt-2 text-[11px] text-slate-500">
+      <figcaption className="mt-2 text-[11px] text-muted">
         {usage.estimated_events > 0
           ? `${usage.estimated_events} of ${usage.requests} events used estimated token counts (non-neural test model); the rest are exact tokenizer counts.`
           : "Exact counts from the INFINITY tokenizer."}

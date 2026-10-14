@@ -19,7 +19,7 @@ function AuthGate() {
     window.addEventListener("infinity:unauthorized", onUnauthorized);
     return () => window.removeEventListener("infinity:unauthorized", onUnauthorized);
   }, [refreshMe]);
-  if (me === undefined) return <div className="atmosphere h-full" aria-busy="true" />;
+  if (me === undefined) return <div className="h-full bg-bg" aria-busy="true" />;
   if (me === null) return <AuthScreen onAuthed={refreshMe} />;
   return (
     <StoreProvider key={me.user.id}>

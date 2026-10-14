@@ -1,53 +1,103 @@
-import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
-import ChatPanel from "./components/ChatPanel";
-import CommandDock from "./components/CommandDock";
-import InfinityCore from "./components/InfinityCore";
 import ModelStatus from "./components/ModelStatus";
 import ProjectLauncher from "./components/ProjectLauncher";
-import SettingsPopover, { loadSettings, saveSettings, type Settings } from "./components/SettingsPopover";
-import TaskWorkspace, { PANELS, type PanelId } from "./components/TaskWorkspace";
-import BottomNav, { type View } from "./components/BottomNav";
 import UpgradeOverlay from "./components/UpgradeOverlay";
 import { api } from "./lib/api";
 import { modelName, num } from "./lib/format";
+import { loadPrefs, savePrefs, type Prefs } from "./lib/prefs";
 import { useStore } from "./lib/store";
-import type { ChatTurn, Checkpoint, DockMode, HyperAdapter, Me, OpenModel } from "./lib/types";
+import { applyTheme, loadTheme, saveTheme, type Theme } from "./lib/theme";
+import type { ChatTurn, Checkpoint, ConversationSummary, HyperAdapter, Me, Mode, OpenModel } from "./lib/types";
 import AdminView from "./views/AdminView";
+import HistoryView from "./views/HistoryView";
 import IntelligenceView from "./views/IntelligenceView";
 import KeysView from "./views/KeysView";
 import PlansView from "./views/PlansView";
+import SettingsView from "./views/SettingsView";
 import TokensView from "./views/TokensView";
+import ChatThread from "./ui/ChatThread";
+import Composer, { type WorkMode } from "./ui/Composer";
+import CookWorkspace from "./ui/CookWorkspace";
+import { Icon } from "./ui/Icons";
+import ModelSelect from "./ui/ModelSelect";
+import Sidebar, { parseRoute, routeHash, type Route } from "./ui/Sidebar";
 
-const ALL_PANELS: PanelId[] = ["task", "review", "files", "code", "stream"];
+const SUGGESTIONS = [
+  { label: "Build a website", text: "Help me build a simple website for " },
+  { label: "Explain a concept", text: "Explain this concept in simple terms: " },
+  { label: "Write some code", text: "Write a Python function that " },
+  { label: "Brainstorm an idea", text: "Brainstorm ideas for " },
+];
+
+const TITLES: Record<Route["name"], string> = {
+  chat: "", history: "Chat history", cook: "Cook", settings: "Settings", plans: "Plans & billing",
+  usage: "Usage", keys: "API keys", intelligence: "Model & benchmarks", admin: "Admin",
+};
+
+interface ChatState {
+  id: number | null;
+  title: string | null;
+  turns: ChatTurn[];
+}
 
 export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe: () => void; onLoggedOut: () => void }) {
   const store = useStore();
-  const [view, setView] = useState<View>("home");
-  const [upgrade, setUpgrade] = useState(false);
   const { status, connected } = store;
-  // Accounts without COOK start in Normal chat, which every signed-in account can use.
-  const [mode, setMode] = useState<DockMode>(me.entitlement.cook ? "code" : "chat");
+  const [route, setRoute] = useState<Route>(() => parseRoute(window.location.hash));
+  const [theme, setThemeState] = useState<Theme>(loadTheme);
+  const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
+  const [mobileNav, setMobileNav] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [openModels, setOpenModels] = useState<OpenModel[]>([]);
   const [hyperAdapters, setHyperAdapters] = useState<HyperAdapter[]>([]);
-  const [chat, setChat] = useState<ChatTurn[]>([]);
-  const [chatWaiting, setChatWaiting] = useState(false);
-  const [switching, setSwitching] = useState(false);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [chat, setChat] = useState<ChatState>({ id: null, title: null, turns: [] });
+  const [waiting, setWaiting] = useState(false);
+  const [prefill, setPrefill] = useState<{ text: string; n: number } | undefined>();
+  const [agentMode, setAgentMode] = useState<Mode>("code");
   const [launcher, setLauncher] = useState(false);
-  const [settings, setSettingsState] = useState<Settings>(loadSettings);
-  const [open, setOpen] = useState<Set<PanelId>>(() => new Set(loadSettings().view === "workspace" ? ALL_PANELS : []));
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [upgrade, setUpgrade] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [sweep, setSweep] = useState(0);
+  const request = useRef(0);
   const spokenFor = useRef<string | null>(null);
 
-  const setSettings = (s: Settings) => {
-    setSettingsState(s);
-    saveSettings(s);
-    setOpen(new Set(s.view === "workspace" ? ALL_PANELS : []));
-  };
+  const ent = (status as (typeof status & { entitlement?: Me["entitlement"] }) | null)?.entitlement ?? me.entitlement;
+  const isOwner = me.user.role === "owner";
+  const agentBusy = status?.agent.busy ?? false;
+  const model = status?.model;
 
+  // ---------------------------------------------------------------- routing, theme, prefs
+  useEffect(() => {
+    const on = () => setRoute(parseRoute(window.location.hash));
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  const go = useCallback((r: Route) => {
+    const h = routeHash(r);
+    if (window.location.hash !== h) window.location.hash = h;
+    setRoute(r);
+  }, []);
+  useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => setMobileNav(false), [route]);
+  useEffect(() => {
+    if (!mobileNav) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMobileNav(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [mobileNav]);
+  const setTheme = (t: Theme) => {
+    setThemeState(t);
+    saveTheme(t);
+  };
+  const setPrefs = (p: Partial<Prefs>) =>
+    setPrefsState((old) => {
+      const n = { ...old, ...p };
+      savePrefs(n);
+      return n;
+    });
+
+  // ---------------------------------------------------------------- data
   const loadModels = useCallback(() => {
     api.models().then(
       (m) => {
@@ -59,89 +109,116 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
     );
   }, []);
   useEffect(loadModels, [loadModels, connected]);
+  const loadConversations = useCallback(() => {
+    api.conversations().then((r) => setConversations(r.conversations), () => undefined);
+  }, []);
+  useEffect(loadConversations, [loadConversations]);
 
-  // Keyboard shortcuts
+  // Open a saved conversation when the route points at one.
+  useEffect(() => {
+    if (route.name !== "chat") return;
+    if (!route.id) return;
+    if (route.id === chat.id) return;
+    const n = ++request.current;
+    setWaiting(false);
+    api.conversation(route.id).then(
+      (c) => n === request.current && setChat({ id: c.id, title: c.title, turns: c.messages }),
+      (e) => {
+        setNotice((e as Error).message);
+        go({ name: "chat" });
+      },
+    );
+  }, [route, chat.id, go]);
+
+  // ---------------------------------------------------------------- keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "o") {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.key.toLowerCase() === "o" && !e.shiftKey) {
         e.preventDefault();
-        setLauncher(true);
-      } else if ((e.ctrlKey || e.metaKey) && e.key === ".") {
+        ent.cook ? setLauncher(true) : setUpgrade(true);
+      } else if (mod && e.shiftKey && e.key.toLowerCase() === "o") {
         e.preventDefault();
-        setOpen((o) => (o.size === ALL_PANELS.length ? new Set() : new Set(ALL_PANELS)));
+        newChat();
+      } else if (mod && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        setPrefs({ sidebarCollapsed: !prefs.sidebarCollapsed });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  });
 
-  // Optional: read the final summary aloud (speaking state is driven by the real utterance).
+  // ---------------------------------------------------------------- read aloud (opt-in)
+  const speak = (text: string) => {
+    if (!prefs.readAloud || !("speechSynthesis" in window)) return;
+    const u = new SpeechSynthesisUtterance(text.replace(/```[\s\S]*?```/g, " code block "));
+    u.onstart = () => store.setSpeaking(true);
+    u.onend = u.onerror = () => store.setSpeaking(false);
+    window.speechSynthesis.speak(u);
+  };
   useEffect(() => {
     const r = store.report;
-    if (!settings.readAloud || !r || spokenFor.current === r.task_id || !("speechSynthesis" in window)) return;
+    if (!r || spokenFor.current === r.task_id) return;
     spokenFor.current = r.task_id;
-    const u = new SpeechSynthesisUtterance(`${r.status.replace(/_/g, " ")}. ${r.summary}`);
-    let decay: ReturnType<typeof setInterval> | undefined;
-    u.onstart = () => {
-      store.setSpeaking(true);
-      decay = setInterval(() => (store.amplitude.current *= 0.82), 50);
-    };
-    u.onboundary = () => (store.amplitude.current = 0.9);
-    u.onend = u.onerror = () => {
-      clearInterval(decay);
-      store.amplitude.current = 0;
-      store.setSpeaking(false);
-    };
-    window.speechSynthesis.speak(u);
-  }, [store.report, settings.readAloud, store]);
+    speak(`${r.status.replace(/_/g, " ")}. ${r.summary}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.report]);
 
-  const ent = (status as (typeof status & { entitlement?: Me["entitlement"] }) | null)?.entitlement ?? me.entitlement;
-  const isOwner = me.user.role === "owner";
-  const busy = status?.agent.busy ?? false;
-  const isChat = mode === "chat";
-  const disabledReason = switching
-    ? "Switching model…"
-    : isChat
-    ? !connected
-      ? "INFINITY runtime is not reachable — start it with `infinity studio`"
-      : status?.model.state !== "ready"
-        ? `No model loaded: ${status?.model.reason ?? "loading"}`
-        : null
-    : !ent.cook
-    ? null // gate shown as a hint; submitting opens the upgrade screen (the server enforces it too)
-    : !connected
-    ? "INFINITY runtime is not reachable — start it with `infinity studio`"
-    : !status?.workspace
-      ? "Attach a project first (paperclip below, or Ctrl+O)"
-      : status.model.state !== "ready"
-        ? `Model unavailable: ${status.model.reason ?? "loading"}`
-        : null;
+  // ---------------------------------------------------------------- chat
+  const newChat = () => {
+    if (waiting) api.chatCancel().catch(() => undefined);
+    request.current++;
+    setWaiting(false);
+    setChat({ id: null, title: null, turns: [] });
+    setNotice(null);
+    go({ name: "chat" });
+  };
 
-  const sendChat = async (text: string) => {
-    const history: ChatTurn[] = [...chat, { role: "user", content: text }];
-    setChat(history);
-    setChatWaiting(true);
+  const sendHistory = async (history: ChatTurn[], restoreText?: string) => {
+    const before = chat.turns;
+    const n = ++request.current;
+    setChat((c) => ({ ...c, turns: history }));
+    setWaiting(true);
+    setNotice(null);
     try {
-      const r = await api.chat(history);
-      setChat([...history, { role: "assistant", content: r.reply, model: r.model.product }]);
+      const r = await api.chat(history, chat.id);
+      if (n !== request.current) return;
+      setChat({ id: r.conversation.id, title: r.conversation.title,
+        turns: [...history, { role: "assistant", content: r.reply, model: r.model.product, stopped: r.stopped }] });
+      if (route.name === "chat" && route.id !== r.conversation.id) {
+        window.history.replaceState(null, "", routeHash({ name: "chat", id: r.conversation.id }));
+        setRoute({ name: "chat", id: r.conversation.id });
+      }
+      loadConversations();
+      speak(r.reply);
     } catch (e) {
+      if (n !== request.current) return;
+      setChat((c) => ({ ...c, turns: before }));
+      if (restoreText) setPrefill({ text: restoreText, n: Date.now() });
       setNotice((e as Error).message);
     } finally {
-      setChatWaiting(false);
+      if (n === request.current) setWaiting(false);
     }
   };
 
-  const submit = async (text: string) => {
+  const stopChat = () => api.chatCancel().catch((e) => setNotice((e as Error).message));
+  const regenerate = () => {
+    const last = chat.turns.map((t) => t.role).lastIndexOf("assistant");
+    if (last > 0) sendHistory(chat.turns.slice(0, last));
+  };
+  const editAndResend = (i: number, text: string) => sendHistory([...chat.turns.slice(0, i), { role: "user", content: text }]);
+
+  // ---------------------------------------------------------------- cook
+  const startCook = async (text: string) => {
     setNotice(null);
-    if (mode === "chat") return sendChat(text);
     if (!ent.cook) {
       setUpgrade(true);
       return;
     }
     try {
       store.clearTaskView();
-      await api.startTask(text, mode);
-      setOpen((o) => new Set([...o, "task", "stream"]));
+      await api.startTask(text, agentMode);
     } catch (e) {
       setNotice((e as Error).message);
       throw e;
@@ -155,7 +232,6 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
       await api.setModel(value);
       setNotice(null);
       await store.refresh();
-      setSweep((s) => s + 1);
     } catch (e) {
       setNotice((e as Error).message);
     } finally {
@@ -163,175 +239,161 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
     }
   };
 
-  const workspaceName = status?.workspace ? status.workspace.split("/").filter(Boolean).pop() ?? status.workspace : null;
-  const workspaceOpen = open.size > 0 || store.approvals.length > 0;
+  // ---------------------------------------------------------------- composer
+  const isCook = route.name === "cook";
+  const offline = "Infinity Bot runtime is not reachable — start it with `infinity studio`";
+  const disabledReason = switching
+    ? "Switching model…"
+    : !connected
+      ? offline
+      : model?.state !== "ready"
+        ? `No model loaded: ${model?.reason ?? "loading"}`
+        : isCook && ent.cook && !status?.workspace
+          ? "Open a project first (folder button below, or Ctrl+O)"
+          : null;
+  const onMode = (m: WorkMode) => (m === "cook" ? go({ name: "cook" }) : go(chat.id ? { name: "chat", id: chat.id } : { name: "chat" }));
+  const modelSlot = (
+    <ModelSelect model={model} checkpoints={checkpoints} hyperAdapters={hyperAdapters} openModels={openModels}
+      onSelect={selectModel} disabled={agentBusy || waiting || switching} />
+  );
+  const workspaceName = status?.workspace ? status.workspace.split(/[\\/]/).filter(Boolean).pop() ?? status.workspace : null;
+  const composer = (size: "hero" | "dock") => (
+    <Composer
+      mode={isCook ? "cook" : "normal"}
+      onMode={onMode}
+      agentMode={agentMode}
+      onAgentMode={setAgentMode}
+      onSubmit={isCook ? startCook : (t) => sendHistory([...chat.turns, { role: "user", content: t }], t)}
+      onStop={isCook ? () => api.cancel().catch((e) => setNotice((e as Error).message)) : stopChat}
+      busy={isCook ? agentBusy : waiting}
+      disabledReason={isCook && !ent.cook ? null : disabledReason}
+      placeholder={isCook && !ent.cook ? "Cook needs a Plus, Pro or Max plan — press Enter to see plans" : undefined}
+      modelSlot={modelSlot}
+      onAttachProject={() => (ent.cook ? setLauncher(true) : setUpgrade(true))}
+      workspaceName={workspaceName}
+      size={size}
+      autoFocus={size === "hero"}
+      prefill={prefill}
+      onListening={store.setListening}
+    />
+  );
+
+  const title = route.name === "chat" ? chat.title ?? "" : TITLES[route.name];
+  const planLabel = isOwner ? "Owner · usage not charged" : `${ent.subscription ? ent.plan.name : "Free"} · ${num(ent.balance)} credits`;
+  const logout = () => api.logout().finally(onLoggedOut);
 
   return (
-    <div className="atmosphere relative flex h-full flex-col">
-      {/* TOP EDGE */}
-      <header className="relative z-40 flex items-center gap-3 px-4 pt-3 sm:px-5">
-        <div className="flex items-center gap-2">
-          <svg width="26" height="14" viewBox="0 0 64 32" aria-hidden>
-            <path d="M32 16c-6-8-12-12-18-12a12 12 0 0 0 0 24c6 0 12-4 18-12s12-12 18-12a12 12 0 0 1 0 24c-6 0-12-4-18-12z" fill="none" stroke="#5ee7ff" strokeWidth="4" />
-          </svg>
-          <span className="hidden text-sm font-medium tracking-[0.2em] text-slate-200 sm:inline">INFINITY BOT</span>
-        </div>
-        <div className="flex flex-1 justify-center">
-          <ModelStatus status={status} connected={connected} />
-        </div>
-        <div className="hidden lg:block">
-          <BottomNav view={view} onView={setView} isOwner={isOwner} email={me.user.email}
-            onLogout={() => api.logout().finally(onLoggedOut)} />
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`glass hidden items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] tracking-wider sm:flex ${connected ? "text-emerald-300" : "text-red-300"}`}
-            role="status"
-          >
-            <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-300" : "bg-red-400"}`} />
-            {connected ? "CONNECTED" : "OFFLINE"}
-          </span>
-          <button onClick={() => setView("tokens")} title="Plan and remaining credits"
-            className="glass hidden items-center gap-1.5 whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] tracking-wider text-slate-300 hover:text-white md:flex">
-            {isOwner ? "OWNER · usage not charged" : `${ent.subscription ? ent.plan.name : "FREE"} · ${num(ent.balance)} credits`}
-          </button>
-          <button
-            onClick={() => setOpen(open.size === ALL_PANELS.length ? new Set() : new Set(ALL_PANELS))}
-            aria-pressed={open.size === ALL_PANELS.length}
-            title="Toggle development workspace (Ctrl+.)"
-            className={`glass rounded-xl p-2 ${workspaceOpen ? "text-cyan-glow" : "text-slate-300 hover:text-white"}`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-              <rect x="3" y="4" width="7" height="16" rx="1.5" />
-              <rect x="14" y="4" width="7" height="7" rx="1.5" />
-              <rect x="14" y="13" width="7" height="7" rx="1.5" />
-            </svg>
-            <span className="sr-only">Workspace</span>
-          </button>
-          <SettingsPopover settings={settings} onChange={setSettings} />
-        </div>
-      </header>
+    <div className="flex h-full bg-bg text-fg">
+      <Sidebar
+        route={route}
+        go={go}
+        collapsed={prefs.sidebarCollapsed}
+        onToggle={() => setPrefs({ sidebarCollapsed: !prefs.sidebarCollapsed })}
+        conversations={conversations}
+        onNewChat={newChat}
+        onProjects={() => (ent.cook ? setLauncher(true) : setUpgrade(true))}
+        user={me.user}
+        planLabel={planLabel}
+        isOwner={isOwner}
+        theme={theme}
+        onTheme={setTheme}
+        onLogout={logout}
+        mobileOpen={mobileNav}
+        onMobileClose={() => setMobileNav(false)}
+      />
 
-      {view !== "home" && (
-        <div className="absolute inset-0 z-20">
-          {view === "plans" && <PlansView entitlement={ent} onBack={() => setView("home")} />}
-          {view === "intelligence" && <IntelligenceView />}
-          {view === "tokens" && <TokensView onPlans={() => setView("plans")} />}
-          {view === "keys" && <KeysView apiAllowed={ent.api || isOwner} onPlans={() => setView("plans")} />}
-          {view === "admin" && isOwner && <AdminView />}
-        </div>
-      )}
-      <div className="fixed bottom-3 left-1/2 z-50 -translate-x-1/2 lg:hidden">
-        {view !== "home" && (
-          <BottomNav view={view} onView={setView} isOwner={isOwner} email={me.user.email} onLogout={() => api.logout().finally(onLoggedOut)} />
-        )}
-      </div>
-
-      {view === "home" && (<>
-      {/* CENTER */}
-      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4">
-        <div className="relative">
-          <InfinityCore
-            state={store.core}
-            amplitude={store.amplitude}
-            compact={workspaceOpen || (isChat && chat.length > 0)}
-            onActivate={() => setOpen((o) => new Set([...o, "task", "stream"]))}
-          />
-          <AnimatePresence>
-            {sweep > 0 && (
-              <motion.div
-                key={sweep}
-                aria-hidden
-                initial={{ x: "-60%", opacity: 0 }}
-                animate={{ x: "60%", opacity: [0, 0.7, 0] }}
-                transition={{ duration: 1.1, ease: "easeInOut" }}
-                className="pointer-events-none absolute inset-y-0 left-1/4 w-1/2 bg-gradient-to-r from-transparent via-cyan-glow/25 to-transparent blur-xl"
-              />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-5">
+          <button onClick={() => setMobileNav(true)} aria-label="Open menu" className="rounded-lg p-2 text-muted hover:bg-hover hover:text-fg md:hidden">
+            {Icon.menu}
+          </button>
+          <h1 className="min-w-0 truncate text-sm font-medium text-fg">{title}</h1>
+          <div className="ml-auto flex items-center gap-2">
+            {!connected && (
+              <span role="status" className="rounded-md bg-bad/10 px-2 py-1 text-xs text-bad">Offline</span>
             )}
-          </AnimatePresence>
-        </div>
-        <p className="mt-1 flex items-center gap-2 text-sm tracking-[0.18em] text-slate-200" aria-live="polite">
-          {busy && !store.approvals.length && (
-            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-cyan-glow/30 border-t-cyan-glow motion-reduce:animate-none" aria-hidden />
-          )}
-          {store.label}
-        </p>
-        {store.taskText && (busy || store.core === "success" || store.core === "error") && (
-          <p className="mt-2 max-w-xl truncate text-center text-xs text-slate-400">TASK: {store.taskText}</p>
-        )}
-        {!connected && <p className="mt-3 text-xs text-red-300">Cannot reach the local INFINITY runtime. Run <code className="font-mono">infinity studio</code>.</p>}
-      </main>
+            <ModelStatus status={status} connected={connected} />
+          </div>
+        </header>
 
-      {/* BOTTOM DOCK */}
-      <footer className="relative z-40 flex flex-col items-center gap-2 px-3 pb-[max(12px,env(safe-area-inset-bottom))] sm:px-4">
         {notice && (
-          <div role="alert" className="glass max-w-[760px] rounded-xl px-3 py-2 text-xs text-amber-diag">
-            {notice}
-            <button onClick={() => setNotice(null)} className="ml-3 text-slate-400 hover:text-white" aria-label="Dismiss">
-              ✕
+          <div role="alert" className="mx-auto mb-2 flex w-full max-w-3xl items-start gap-2 px-4 sm:px-6">
+            <p className="flex-1 rounded-lg border border-warn/30 bg-warn/5 px-3 py-2 text-sm text-fg">{notice}</p>
+            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="rounded-md p-2 text-muted hover:bg-hover hover:text-fg">
+              {Icon.close}
             </button>
           </div>
         )}
-        {isChat && (chat.length > 0 || chatWaiting) && (
-          <ChatPanel turns={chat} waiting={chatWaiting} onClear={() => setChat([])} />
-        )}
-        {!isChat && !workspaceOpen && store.taskText && (
-          <div className="flex gap-1.5" aria-label="Open workspace panels">
-            {PANELS.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setOpen(new Set([p.id]))}
-                className="glass flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-slate-400 hover:text-white"
-              >
-                {p.icon}
-                {p.label}
-              </button>
+
+        <main className="flex min-h-0 flex-1 flex-col">
+          {route.name === "chat" &&
+            (chat.turns.length === 0 && !waiting ? (
+              <div className="scroll-thin flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 pb-16">
+                <div className="w-full max-w-2xl">
+                  <h2 className="text-center text-3xl font-semibold tracking-tight text-fg sm:text-[34px]">What can I help you build?</h2>
+                  <p className="mt-2 text-center text-[15px] text-muted">Ask anything, explore ideas, or start building something new.</p>
+                  <div className="mt-8">{composer("hero")}</div>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    {SUGGESTIONS.map((s) => (
+                      <button key={s.label} onClick={() => setPrefill({ text: s.text, n: Date.now() })}
+                        className="rounded-full border border-line bg-surface px-3 py-1.5 text-[13px] text-fg/75 transition hover:bg-hover hover:text-fg">
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                  {model?.state === "ready" && (
+                    <p className="mt-8 text-center text-xs text-muted">{modelName(model)} runs locally on this computer.</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="scroll-thin min-h-0 flex-1 overflow-y-auto">
+                  <ChatThread turns={chat.turns} waiting={waiting} onRegenerate={regenerate} onEdit={editAndResend} />
+                </div>
+                <div className="px-3 pb-3 sm:px-6 sm:pb-5">
+                  <div className="mx-auto max-w-3xl">{composer("dock")}</div>
+                  <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-muted">
+                    Replies come from a local model and can be wrong. Check important answers.
+                  </p>
+                </div>
+              </>
             ))}
-          </div>
-        )}
-        <CommandDock
-          mode={mode}
-          onMode={setMode}
-          onSubmit={submit}
-          onCancel={() => api.cancel().catch((e) => setNotice((e as Error).message))}
-          busy={isChat ? false : busy}
-          disabledReason={disabledReason}
-          model={status?.model}
-          checkpoints={checkpoints}
-          openModels={openModels}
-          hyperAdapters={hyperAdapters}
-          onSelectModel={selectModel}
-          onAttach={() => (ent.cook ? setLauncher(true) : setUpgrade(true))}
-          workspaceName={workspaceName}
-          taskText={store.taskText}
-          onListening={store.setListening}
-          amplitude={store.amplitude}
-          placeholder={isChat ? `Message ${modelName(status?.model)}…` : ent.cook ? undefined : `COOK locked — ${ent.cook_reason ?? "paid plan required"}. Press Enter to see plans.`}
-        />
-      </footer>
+          {route.name === "cook" && (
+            <CookWorkspace
+              composer={composer("dock")}
+              locked={!ent.cook}
+              lockedReason={ent.cook_reason}
+              onUnlock={() => setUpgrade(true)}
+              onOpenProject={() => (ent.cook ? setLauncher(true) : setUpgrade(true))}
+              permission={status?.workspace ? status.permission : null}
+            />
+          )}
+          {route.name === "history" && (
+            <HistoryView conversations={conversations} onOpen={(id) => go({ name: "chat", id })}
+              onChanged={() => { loadConversations(); }} />
+          )}
+          {route.name === "settings" && (
+            <SettingsView me={me} theme={theme} onTheme={setTheme} readAloud={prefs.readAloud}
+              onReadAloud={(v) => setPrefs({ readAloud: v })} model={model} onLogout={logout} onPlans={() => go({ name: "plans" })} />
+          )}
+          {route.name === "plans" && <div className="min-h-0 flex-1"><PlansView entitlement={ent} onBack={() => go({ name: "chat" })} /></div>}
+          {route.name === "usage" && <div className="min-h-0 flex-1"><TokensView onPlans={() => go({ name: "plans" })} /></div>}
+          {route.name === "keys" && <div className="min-h-0 flex-1"><KeysView apiAllowed={ent.api || isOwner} onPlans={() => go({ name: "plans" })} /></div>}
+          {route.name === "intelligence" && <div className="min-h-0 flex-1"><IntelligenceView /></div>}
+          {route.name === "admin" && (isOwner ? <div className="min-h-0 flex-1"><AdminView /></div>
+            : <p className="p-8 text-center text-sm text-muted">The admin console is for the owner account.</p>)}
+        </main>
+      </div>
 
-      <TaskWorkspace open={open} setOpen={setOpen} selectedFile={selectedFile} setSelectedFile={setSelectedFile} />
-      </>)}
-      {view === "home" && (
-        <div className="fixed left-3 top-14 z-40 lg:hidden">
-          <BottomNav view={view} onView={setView} isOwner={isOwner} email={me.user.email} onLogout={() => api.logout().finally(onLoggedOut)} />
-        </div>
-      )}
       {upgrade && (
-        <UpgradeOverlay reason={ent.cook_reason ?? "COOK requires an active Plus, Pro or Max subscription"} onClose={() => { setUpgrade(false); refreshMe(); }}
-          onComparePlans={() => { setUpgrade(false); setView("plans"); }} />
+        <UpgradeOverlay reason={ent.cook_reason ?? "Cook requires an active Plus, Pro or Max subscription"}
+          onClose={() => { setUpgrade(false); refreshMe(); }}
+          onComparePlans={() => { setUpgrade(false); go({ name: "plans" }); }} />
       )}
-
       {launcher && (
-        <ProjectLauncher
-          current={status?.workspace ?? null}
-          onClose={() => setLauncher(false)}
-          onOpened={() => {
-            setSweep((s) => s + 1);
-            setSelectedFile(null);
-            store.refresh();
-          }}
-        />
+        <ProjectLauncher current={status?.workspace ?? null} onClose={() => setLauncher(false)}
+          onOpened={() => { store.refresh(); }} />
       )}
     </div>
   );

@@ -1,24 +1,41 @@
 /** @type {import('tailwindcss').Config} */
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
-        obsidian: { DEFAULT: "#04060b", 900: "#070a12", 800: "#0b101b", 700: "#111827" },
-        glass: "rgba(16, 22, 34, 0.55)",
-        cyan: { glow: "#5ee7ff", soft: "#9ff3ff" },
-        electric: "#3b82f6",
-        violet: { soft: "#8b7cf6" },
-        amber: { diag: "#f5b84b" },
+        // Semantic tokens (light/dark values live in src/index.css).
+        bg: v("bg"),
+        surface: v("surface"),
+        "surface-2": v("surface-2"),
+        fg: v("fg"),
+        muted: v("muted"),
+        line: v("line"),
+        hover: v("hover"),
+        accent: v("accent"),
+        cook: v("cook"),
+        ok: v("ok"),
+        bad: v("bad"),
+        warn: v("warn"),
+        // Older names kept as aliases so existing views follow the theme.
+        cyan: { glow: v("accent"), soft: v("accent") },
+        electric: v("accent"),
+        violet: { soft: v("cook") },
+        amber: { diag: v("warn") },
+        obsidian: { DEFAULT: v("surface"), 900: v("bg"), 800: v("surface"), 700: v("surface-2") },
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
       boxShadow: {
-        glass: "0 10px 40px -10px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05)",
-        glow: "0 0 24px -4px rgba(94,231,255,0.45)",
+        card: "0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -6px rgb(15 23 42 / 0.08)",
+        pop: "0 12px 32px -12px rgb(15 23 42 / 0.25)",
       },
+      transitionDuration: { DEFAULT: "180ms" },
     },
   },
   plugins: [],

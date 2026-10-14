@@ -7,6 +7,7 @@ from pathlib import Path
 from .audit import Audit
 from .auth import Auth, AuthError, User
 from .billing import Billing, BillingError
+from .conversations import ConversationError, Conversations
 from .db import PlatformDB
 from .keys import Keys, KeyError_
 
@@ -18,6 +19,7 @@ class Platform:
         self.auth = Auth(self.db, self.audit, allow_registration)
         self.billing = Billing(self.db, self.audit, plans_file)
         self.keys = Keys(self.db, self.audit)
+        self.conversations = Conversations(self.db)
 
 
-__all__ = ["Platform", "PlatformDB", "Audit", "Auth", "AuthError", "User", "Billing", "BillingError", "Keys", "KeyError_"]
+__all__ = ["Platform", "PlatformDB", "Audit", "Auth", "AuthError", "User", "Billing", "BillingError", "Keys", "KeyError_", "Conversations", "ConversationError"]

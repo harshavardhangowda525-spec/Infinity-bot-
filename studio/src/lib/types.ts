@@ -51,7 +51,32 @@ export interface OpenModel {
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
-  model?: string;
+  model?: string | null;
+  stopped?: boolean;
+}
+
+export interface ConversationSummary {
+  id: number;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  messages: number;
+}
+
+export interface Conversation {
+  id: number;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  messages: ChatTurn[];
+}
+
+export interface ChatResult {
+  reply: string;
+  stopped: boolean;
+  conversation: { id: number; title: string };
+  model: { product: string; family: string; variant?: string };
+  usage: { tokens_in: number; tokens_out: number; credits_charged: number };
 }
 
 export interface TaskSummary {

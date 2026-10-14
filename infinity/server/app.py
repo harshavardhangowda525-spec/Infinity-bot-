@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import os
 import secrets
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -28,7 +29,7 @@ from pydantic import BaseModel, Field
 from ..agent.checkpoints import CheckpointStore, list_sessions
 from ..agent.permissions import BINARY_EXTS, IGNORED_DIRS, PathError, is_sensitive_path
 from ..agent.project import detect_project
-from ..platform import AuthError, BillingError, KeyError_, Platform, User
+from ..platform import AuthError, BillingError, ConversationError, KeyError_, Platform, User
 from .runtime import RuntimeHub, find_checkpoints, hyper_adapters, open_models
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]", "testserver"}
@@ -59,8 +60,13 @@ class ChatMessage(BaseModel):
 
 
 class ChatIn(BaseModel):
-    messages: list[ChatMessage] = Field(min_length=1, max_length=60)
+    messages: list[ChatMessage] = Field(min_length=1, max_length=400)
     max_new_tokens: int = Field(default=512, ge=16, le=2048)
+    conversation_id: int | None = None
+
+
+class TitleIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
 
 
 class TaskIn(BaseModel):
@@ -357,12 +363,15 @@ def create_app(hub: RuntimeHub, platform: Platform, static_dir: Path | None = No
         P.audit.record(user.id, "model.switch", target, request_id=request.state.request_id)
         return hub.model_status()
 
+    chat_cancel: dict[int, threading.Event] = {}
+
     @app.post("/api/chat")
     def chat(body: ChatIn, request: Request, user: User = Depends(write_dep)):
         """Normal chat: a plain conversation with the loaded model (no files, no tools).
 
         Available to every signed-in account. Usage is always recorded. Credits are charged
-        only on paid plans (free accounts are not charged), and the owner is exempt.
+        only on paid plans (free accounts are not charged), and the owner is exempt. The
+        conversation, as shown to the user, is saved to their history.
         """
         from ..agent.models import Message
         from ..hf.chat import system_prompt_for
@@ -370,20 +379,31 @@ def create_app(hub: RuntimeHub, platform: Platform, static_dir: Path | None = No
         model = hub.model
         if model is None:
             raise HTTPException(503, f"no model loaded: {hub.model_error}")
+        if body.messages[-1].role != "user":
+            raise HTTPException(422, "the last message must be from the user")
+        if body.conversation_id is not None:
+            try:
+                P.conversations.get(user.id, body.conversation_id)
+            except ConversationError as e:
+                raise HTTPException(e.status, str(e))
         info = model.info()
         system = Message("system", system_prompt_for(info))
         turns = [Message(m.role, m.content) for m in body.messages]
-        if turns[-1].role != "user":
-            raise HTTPException(422, "the last message must be from the user")
         max_new = max(16, min(body.max_new_tokens, model.max_context_tokens // 2))
         budget = model.max_context_tokens - max_new - 32
         count = lambda ms: sum(model.count_tokens(m.content)[0] + 8 for m in ms)
         while len(turns) > 1 and count([system] + turns) > budget:
             turns = turns[2:] if len(turns) > 2 else turns[1:]  # drop the oldest exchange
+        cancel = threading.Event()
+        chat_cancel[user.id] = cancel
         try:
-            comp = model.complete([system] + turns, max_new_tokens=max_new)
+            comp = model.complete([system] + turns, max_new_tokens=max_new, cancel=cancel)
         except Exception as e:
             raise HTTPException(500, f"generation failed: {type(e).__name__}: {e}")
+        finally:
+            if chat_cancel.get(user.id) is cancel:
+                chat_cancel.pop(user.id, None)
+        stopped = cancel.is_set()
         ref = f"chat:{request.state.request_id}"
         P.keys.record_usage(user.id, "chat", ref, comp.tokens_in, comp.tokens_out, comp.tokens_exact)
         ent = P.billing.entitlement(user.id)
@@ -391,9 +411,51 @@ def create_app(hub: RuntimeHub, platform: Platform, static_dir: Path | None = No
         if not user.is_owner and (ent.plan.get("monthly_price_inr") or 0) > 0:
             charged = comp.tokens_in + comp.tokens_out
             P.billing.charge(user.id, charged, f"usage:{ref}", "Normal chat", ref)
-        return {"reply": comp.text, "model": {"product": info.get("product"), "family": info.get("family", "infinity")},
+        product = info.get("product")
+        cid = body.conversation_id
+        if cid is None:
+            cid = P.conversations.create(user.id, body.messages[0].content)["id"]
+        stored = [{"role": m.role, "content": m.content} for m in body.messages]
+        P.conversations.replace_messages(user.id, cid, stored + [{"role": "assistant", "content": comp.text, "model": product}])
+        conv = P.conversations.get(user.id, cid)
+        return {"reply": comp.text, "stopped": stopped, "conversation": {"id": cid, "title": conv["title"]},
+                "model": {"product": product, "family": info.get("family", "infinity"), "variant": info.get("variant")},
                 "usage": {"tokens_in": comp.tokens_in, "tokens_out": comp.tokens_out, "exact": comp.tokens_exact,
                           "credits_charged": charged, "context_turns_used": len(turns)}}
+
+    @app.post("/api/chat/cancel")
+    def chat_stop(user: User = Depends(write_dep)):
+        ev = chat_cancel.get(user.id)
+        if ev is None:
+            return {"cancelled": False}
+        ev.set()
+        return {"cancelled": True}
+
+    @app.get("/api/conversations")
+    def conversations(user: User = Depends(user_dep)):
+        return {"conversations": P.conversations.list(user.id)}
+
+    @app.get("/api/conversations/{cid}")
+    def conversation(cid: int, user: User = Depends(user_dep)):
+        try:
+            return P.conversations.get(user.id, cid)
+        except ConversationError as e:
+            raise HTTPException(e.status, str(e))
+
+    @app.patch("/api/conversations/{cid}")
+    def rename_conversation(cid: int, body: TitleIn, user: User = Depends(write_dep)):
+        try:
+            return P.conversations.rename(user.id, cid, body.title)
+        except ConversationError as e:
+            raise HTTPException(e.status, str(e))
+
+    @app.delete("/api/conversations/{cid}")
+    def delete_conversation(cid: int, user: User = Depends(write_dep)):
+        try:
+            P.conversations.delete(user.id, cid)
+        except ConversationError as e:
+            raise HTTPException(e.status, str(e))
+        return {"deleted": True}
 
     @app.get("/api/intelligence")
     def intelligence(user: User = Depends(user_dep)):

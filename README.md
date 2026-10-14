@@ -13,8 +13,8 @@ repository. No pretrained weights and no external AI APIs are used.
 > it does not follow the action protocol, so the runtime reports such tasks as
 > `blocked` instead of pretending. Making the model useful for agent work
 > needs far more data and compute (see `docs/FEASIBILITY.md`). The
-> **INFINITY STUDIO** dashboard (3D infinity core, command dock, floating
-> workspace panels) runs on top of the real agent. Accounts, plans, the credit
+> **INFINITY BOT dashboard** (a clean chat workspace with light and dark themes,
+> saved history, and the Cook coding workspace) runs on top of the real agent. Accounts, plans, the credit
 > ledger, COOK gating, agent API keys and an owner admin console are in place.
 > Payments run in development mode. See `docs/FEATURES.md`.
 
@@ -28,7 +28,7 @@ infinity/
   server/      app.py (FastAPI, local only)  runtime.py (per-user runtimes, shared model)
   platform/    auth.py  billing.py (plans, subscriptions, payments, ledger)  keys.py  audit.py  db.py (migrations)
   audit.py     cli.py
-studio/        INFINITY STUDIO — React + TypeScript + Tailwind + Framer Motion + React Three Fiber
+studio/        Dashboard — React + TypeScript + Tailwind + Framer Motion (src/ui: shell, composer, chat, Cook)
 configs/       hyper-5.5-tiny.json  hyper-5.5-small.json
 data/          manifest.json (licensed sources)  PROVENANCE.md  corpus/
 docs/          ARCHITECTURE.md  FEASIBILITY.md  FEATURES.md  PERMISSIONS.md  TROUBLESHOOTING.md
@@ -148,7 +148,7 @@ infinity studio                                       # http://127.0.0.1:8765, t
   - Agents call `POST /api/v1/generate` with `Authorization: Bearer inf_…`. Calls are rate limited and metered.
 - **Admin console** (owner only): accounts, subscriptions, verified revenue (refunds subtracted, failed payments excluded), token usage, security events, plan configuration, and a hash-chained audit log.
 - **Frontend development:** run `npm run dev` in `studio/`.
-- **Shortcuts:** Enter to send · Shift+Enter for a new line · Ctrl+O project · Ctrl+. workspace.
+- **Shortcuts:** Enter to send · Shift+Enter for a new line · Esc to stop · Ctrl+O open project · Ctrl+Shift+O new chat · Ctrl+B sidebar.
 
 ## Tests
 

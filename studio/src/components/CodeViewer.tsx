@@ -1,25 +1,6 @@
-import hljs from "highlight.js/lib/core";
-import bash from "highlight.js/lib/languages/bash";
-import css from "highlight.js/lib/languages/css";
-import javascript from "highlight.js/lib/languages/javascript";
-import json from "highlight.js/lib/languages/json";
-import markdown from "highlight.js/lib/languages/markdown";
-import python from "highlight.js/lib/languages/python";
-import typescript from "highlight.js/lib/languages/typescript";
-import xml from "highlight.js/lib/languages/xml";
-import yaml from "highlight.js/lib/languages/yaml";
+import hljs from "../lib/highlight";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-
-hljs.registerLanguage("python", python);
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("json", json);
-hljs.registerLanguage("css", css);
-hljs.registerLanguage("xml", xml);
-hljs.registerLanguage("bash", bash);
-hljs.registerLanguage("markdown", markdown);
-hljs.registerLanguage("yaml", yaml);
 
 const EXT: Record<string, string> = {
   py: "python", ts: "typescript", tsx: "typescript", js: "javascript", jsx: "javascript", mjs: "javascript",
@@ -69,14 +50,14 @@ export function FileView({ path, refreshKey }: { path: string; refreshKey: numbe
     };
   }, [path, refreshKey]);
   const lines = useMemo(() => (content === null ? [] : highlightLines(content, languageFor(path))), [content, path]);
-  if (error) return <p className="p-4 text-sm text-red-300">{error}</p>;
-  if (content === null) return <p className="p-4 text-sm text-slate-500">Loading…</p>;
+  if (error) return <p className="p-4 text-sm text-bad">{error}</p>;
+  if (content === null) return <p className="p-4 text-sm text-muted">Loading…</p>;
   const width = String(lines.length).length;
   return (
     <pre className="hljs min-w-max p-3 font-mono text-[12.5px] leading-[1.6]">
       {lines.map((l, i) => (
         <div key={i} className="flex">
-          <span className="mr-4 select-none text-right text-slate-600" style={{ width: `${width}ch` }}>
+          <span className="mr-4 select-none text-right text-muted/70" style={{ width: `${width}ch` }}>
             {i + 1}
           </span>
           <span dangerouslySetInnerHTML={{ __html: l || " " }} />
@@ -118,11 +99,11 @@ export function DiffView({ diff }: { diff: string }) {
         <div
           key={i}
           className={`flex ${
-            r.kind === "add" ? "bg-emerald-400/10 text-emerald-200" : r.kind === "del" ? "bg-red-400/10 text-red-200" : r.kind === "hunk" ? "text-violet-soft" : r.kind === "meta" ? "text-slate-500" : "text-slate-300"
+            r.kind === "add" ? "bg-ok/10 text-ok" : r.kind === "del" ? "bg-bad/10 text-bad" : r.kind === "hunk" ? "text-violet-soft" : r.kind === "meta" ? "text-muted" : "text-fg/80"
           }`}
         >
-          <span className="w-9 select-none pr-1 text-right text-slate-600">{r.a ?? ""}</span>
-          <span className="w-9 select-none pr-2 text-right text-slate-600">{r.b ?? ""}</span>
+          <span className="w-9 select-none pr-1 text-right text-muted/70">{r.a ?? ""}</span>
+          <span className="w-9 select-none pr-2 text-right text-muted/70">{r.b ?? ""}</span>
           <span className="w-3 select-none">{r.kind === "add" ? "+" : r.kind === "del" ? "−" : ""}</span>
           <span>{r.text || " "}</span>
         </div>

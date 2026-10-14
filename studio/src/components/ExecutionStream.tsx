@@ -55,10 +55,10 @@ export function eventsToLines(events: AgentEvent[]): Line[] {
 }
 
 const COLORS: Record<Line["kind"], string> = {
-  state: "text-sky-300/80",
-  out: "text-slate-300",
-  ok: "text-emerald-300",
-  err: "text-red-300",
+  state: "text-accent",
+  out: "text-fg/80",
+  ok: "text-ok",
+  err: "text-bad",
   info: "text-cyan-glow",
   warn: "text-amber-diag",
 };
@@ -83,7 +83,7 @@ export default function ExecutionStream({ events }: { events: AgentEvent[] }) {
       aria-label="Execution stream"
     >
       {lines.length === 0 ? (
-        <p className="text-slate-500">No activity yet. Tool calls, command output and results appear here as they happen.</p>
+        <p className="text-muted">No activity yet. Tool calls, command output and results appear here as they happen.</p>
       ) : (
         lines.map((l) => (
           <div key={l.key} className={`whitespace-pre-wrap break-words ${COLORS[l.kind]}`}>

@@ -28,13 +28,13 @@ export default function Panel({
       className={`glass flex min-h-0 flex-col overflow-hidden rounded-2xl ${className}`}
       aria-label={title}
     >
-      <header className="flex items-center gap-2 border-b border-white/5 px-3.5 py-2.5">
+      <header className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
         {icon && <span className="text-cyan-glow/80">{icon}</span>}
-        <h2 className="text-[11px] font-semibold tracking-[0.14em] text-slate-300">{title}</h2>
+        <h2 className="text-[11px] font-semibold tracking-[0.14em] text-fg/80">{title}</h2>
         <div className="ml-auto flex items-center gap-1">
           {actions}
           {onClose && (
-            <button onClick={onClose} aria-label={`Close ${title}`} className="rounded-md p-1 text-slate-500 hover:bg-white/5 hover:text-slate-200">
+            <button onClick={onClose} aria-label={`Close ${title}`} className="rounded-md p-1 text-muted hover:bg-hover hover:text-fg">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>

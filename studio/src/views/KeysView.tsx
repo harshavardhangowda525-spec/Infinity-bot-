@@ -6,22 +6,22 @@ import type { ApiKey } from "../lib/types";
 function SecretModal({ secret, onClose }: { secret: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       <div role="dialog" aria-modal="true" aria-labelledby="secret-h" className="glass-strong popover w-full max-w-lg rounded-2xl p-5">
-        <h2 id="secret-h" className="text-xs font-semibold tracking-[0.16em] text-slate-100">SECURE KEY — SHOWN ONCE</h2>
-        <p className="mt-2 text-xs text-slate-400">Copy it now. Only a hash is stored; it cannot be shown again. Treat it like a password.</p>
-        <code className="mt-3 block break-all rounded-lg bg-black/40 p-3 font-mono text-xs text-cyan-glow">{secret}</code>
+        <h2 id="secret-h" className="text-xs font-semibold tracking-[0.16em] text-fg">SECURE KEY — SHOWN ONCE</h2>
+        <p className="mt-2 text-xs text-muted">Copy it now. Only a hash is stored; it cannot be shown again. Treat it like a password.</p>
+        <code className="mt-3 block break-all rounded-lg bg-surface-2 p-3 font-mono text-xs text-cyan-glow">{secret}</code>
         <div className="mt-4 flex gap-2">
           <button
             onClick={async () => {
               await navigator.clipboard.writeText(secret);
               setCopied(true);
             }}
-            className="rounded-lg bg-cyan-glow/90 px-3 py-1.5 text-xs font-semibold text-obsidian"
+            className="rounded-lg bg-cyan-glow/90 px-3 py-1.5 text-xs font-semibold text-white"
           >
             {copied ? "Copied" : "Copy key"}
           </button>
-          <button onClick={onClose} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-200">I saved it</button>
+          <button onClick={onClose} className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg">I saved it</button>
         </div>
       </div>
     </div>
@@ -52,10 +52,10 @@ export default function KeysView({ apiAllowed, onPlans }: { apiAllowed: boolean;
 
   return (
     <div className="scroll-thin h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl px-4 pb-32 pt-16 sm:px-6">
+      <div className="mx-auto max-w-5xl px-4 pb-16 pt-6 sm:px-6">
         <section className="glass rounded-2xl p-5">
-          <h2 className="text-[11px] font-semibold tracking-[0.2em] text-slate-400">AGENT API KEY MANAGEMENT</h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <h2 className="text-[11px] font-semibold tracking-[0.2em] text-muted">AGENT API KEY MANAGEMENT</h2>
+          <p className="mt-1 text-xs text-muted">
             Keys let your own agents (for example JARVIS or ASTON) call <code className="font-mono">POST /api/v1/generate</code> on this machine. Usage is metered against your credits.
           </p>
           {!apiAllowed && (
@@ -75,31 +75,31 @@ export default function KeysView({ apiAllowed, onPlans }: { apiAllowed: boolean;
               });
             }}
           >
-            <label className="text-xs text-slate-400">
+            <label className="text-xs text-muted">
               Agent / key name
               <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={48} placeholder="JARVIS"
-                className="mt-1 block w-56 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100" />
+                className="mt-1 block w-56 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg" />
             </label>
-            <label className="text-xs text-slate-400">
+            <label className="text-xs text-muted">
               Requests / minute
               <input type="number" min={1} max={600} value={rate} onChange={(e) => setRate(Number(e.target.value))}
-                className="mt-1 block w-28 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-slate-100" />
+                className="mt-1 block w-28 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg" />
             </label>
-            <button className="rounded-lg bg-gradient-to-r from-cyan-glow to-electric px-4 py-2 text-xs font-semibold text-obsidian">GENERATE NEW KEY</button>
+            <button className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white">GENERATE NEW KEY</button>
           </form>
-          {error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}
+          {error && <p role="alert" className="mt-3 text-xs text-bad">{error}</p>}
         </section>
 
         <section className="glass mt-4 overflow-hidden rounded-2xl">
           {keys === null ? (
-            <p className="p-5 text-sm text-slate-500">Loading…</p>
+            <p className="p-5 text-sm text-muted">Loading…</p>
           ) : keys.length === 0 ? (
-            <p className="p-5 text-sm text-slate-500">No keys yet. Agents appear here only after you create a key for them.</p>
+            <p className="p-5 text-sm text-muted">No keys yet. Agents appear here only after you create a key for them.</p>
           ) : (
             <div className="scroll-thin overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="text-xs text-slate-500">
-                  <tr className="border-b border-white/5">
+                <thead className="text-xs text-muted">
+                  <tr className="border-b border-line">
                     {["Key name", "Prefix", "Status", "Last used", "Requests", "Tokens (in/out)", "Limit", ""].map((h) => (
                       <th key={h} className="p-3 font-normal">{h}</th>
                     ))}
@@ -107,23 +107,23 @@ export default function KeysView({ apiAllowed, onPlans }: { apiAllowed: boolean;
                 </thead>
                 <tbody>
                   {keys.map((k) => (
-                    <tr key={k.id} className="border-b border-white/5 last:border-0">
-                      <td className="p-3 text-slate-100">{k.name}</td>
-                      <td className="p-3 font-mono text-xs text-slate-400">{k.prefix}…</td>
+                    <tr key={k.id} className="border-b border-line last:border-0">
+                      <td className="p-3 text-fg">{k.name}</td>
+                      <td className="p-3 font-mono text-xs text-muted">{k.prefix}…</td>
                       <td className="p-3">
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] tracking-wider ${k.status === "active" ? "bg-emerald-400/10 text-emerald-300" : "bg-red-400/10 text-red-300"}`}>
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] tracking-wider ${k.status === "active" ? "bg-ok/10 text-ok" : "bg-bad/10 text-bad"}`}>
                           {k.status.toUpperCase()}
                         </span>
                       </td>
-                      <td className="p-3 text-xs text-slate-400">{k.last_used_at ? date(k.last_used_at) : "never"}</td>
-                      <td className="p-3 text-xs text-slate-300">{num(k.request_count)}{k.error_count ? ` (${k.error_count} refused)` : ""}</td>
-                      <td className="p-3 text-xs text-slate-300">{num(k.tokens_in)} / {num(k.tokens_out)}</td>
-                      <td className="p-3 text-xs text-slate-400">{k.rate_limit_per_min}/min</td>
+                      <td className="p-3 text-xs text-muted">{k.last_used_at ? date(k.last_used_at) : "never"}</td>
+                      <td className="p-3 text-xs text-fg/80">{num(k.request_count)}{k.error_count ? ` (${k.error_count} refused)` : ""}</td>
+                      <td className="p-3 text-xs text-fg/80">{num(k.tokens_in)} / {num(k.tokens_out)}</td>
+                      <td className="p-3 text-xs text-muted">{k.rate_limit_per_min}/min</td>
                       <td className="p-3 text-right">
                         {k.status === "active" && (
                           <span className="flex justify-end gap-1">
-                            <button onClick={() => setConfirm({ id: k.id, action: "rotate" })} className="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-300 hover:text-white">Rotate</button>
-                            <button onClick={() => setConfirm({ id: k.id, action: "revoke" })} className="rounded border border-red-300/30 px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10">Revoke</button>
+                            <button onClick={() => setConfirm({ id: k.id, action: "rotate" })} className="rounded border border-line px-2 py-1 text-[11px] text-fg/80 hover:text-fg">Rotate</button>
+                            <button onClick={() => setConfirm({ id: k.id, action: "revoke" })} className="rounded border border-bad/30 px-2 py-1 text-[11px] text-bad hover:bg-bad/10">Revoke</button>
                           </span>
                         )}
                       </td>
@@ -137,8 +137,8 @@ export default function KeysView({ apiAllowed, onPlans }: { apiAllowed: boolean;
       </div>
       {secret && <SecretModal secret={secret} onClose={() => setSecret(null)} />}
       {confirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div role="alertdialog" aria-modal="true" className="glass-strong popover max-w-sm rounded-2xl p-5 text-sm text-slate-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div role="alertdialog" aria-modal="true" className="glass-strong popover max-w-sm rounded-2xl p-5 text-sm text-fg/80">
             <p>
               {confirm.action === "revoke"
                 ? "Revoke this key? Any agent using it will be rejected immediately. This cannot be undone."
@@ -154,11 +154,11 @@ export default function KeysView({ apiAllowed, onPlans }: { apiAllowed: boolean;
                     else setSecret((await api.rotateKey(c.id)).key.secret);
                   });
                 }}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${confirm.action === "revoke" ? "bg-red-400/80 text-obsidian" : "bg-cyan-glow/90 text-obsidian"}`}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${confirm.action === "revoke" ? "bg-bad/80 text-white" : "bg-cyan-glow/90 text-white"}`}
               >
                 {confirm.action === "revoke" ? "Revoke key" : "Rotate key"}
               </button>
-              <button onClick={() => setConfirm(null)} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs">Cancel</button>
+              <button onClick={() => setConfirm(null)} className="rounded-lg border border-line px-3 py-1.5 text-xs">Cancel</button>
             </div>
           </div>
         </div>

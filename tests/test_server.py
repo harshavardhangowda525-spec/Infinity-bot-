@@ -294,3 +294,62 @@ def test_intelligence_endpoint_reports_real_state(env):
     c.post("/api/workspace", json={"path": str(env.proj), "permission": "auto"})
     r = c.get("/api/intelligence").json()
     assert r["index"]["files"] >= 1 and "python" in r["index"]["languages"]
+
+
+def test_chat_history_is_saved_isolated_and_editable(env):
+    replies = iter(["first answer", "second answer", "edited answer"])
+    env.hub.set_model(ScriptedModel(lambda msgs: next(replies)), None)
+    u, c = env.user()
+    r = c.post("/api/chat", json={"messages": [{"role": "user", "content": "Hello there, how do loops work?"}]})
+    assert r.status_code == 200, r.text
+    conv = r.json()["conversation"]
+    assert conv["title"] == "Hello there, how do loops work?" and r.json()["stopped"] is False
+    msgs = [{"role": "user", "content": "Hello there, how do loops work?"}, {"role": "assistant", "content": "first answer"},
+            {"role": "user", "content": "and while loops?"}]
+    r = c.post("/api/chat", json={"messages": msgs, "conversation_id": conv["id"]})
+    saved = c.get(f"/api/conversations/{conv['id']}").json()["messages"]
+    assert [m["content"] for m in saved] == [m["content"] for m in msgs] + ["second answer"]
+    assert saved[-1]["model"] == "INFINITY HYPER 5.5" or saved[-1]["model"]  # labelled with the real model
+    # Edit-and-resend replaces everything after the edited message.
+    r = c.post("/api/chat", json={"messages": [{"role": "user", "content": "edited question"}], "conversation_id": conv["id"]})
+    saved = c.get(f"/api/conversations/{conv['id']}").json()["messages"]
+    assert [m["content"] for m in saved] == ["edited question", "edited answer"]
+    assert [x["id"] for x in c.get("/api/conversations").json()["conversations"]] == [conv["id"]]
+
+    other_u, other = env.user("other@example.com")
+    assert other.get(f"/api/conversations/{conv['id']}").status_code == 404
+    assert other.get("/api/conversations").json()["conversations"] == []
+    assert other.post("/api/chat", json={"messages": [{"role": "user", "content": "x"}], "conversation_id": conv["id"]}).status_code == 404
+    assert other.delete(f"/api/conversations/{conv['id']}").status_code == 404
+
+    assert c.patch(f"/api/conversations/{conv['id']}", json={"title": "Loops"}).json()["title"] == "Loops"
+    assert c.delete(f"/api/conversations/{conv['id']}").json() == {"deleted": True}
+    assert c.get(f"/api/conversations/{conv['id']}").status_code == 404
+
+
+def test_chat_stop_cancels_generation(env):
+    import threading
+
+    started = threading.Event()
+
+    class Slow(ScriptedModel):
+        def complete(self, messages, max_new_tokens=512, cancel=None):
+            started.set()
+            for _ in range(200):
+                if cancel is not None and cancel.is_set():
+                    break
+                time.sleep(0.02)
+            return super().complete(messages, max_new_tokens)
+
+    env.hub.set_model(Slow(["partial"]), None)
+    u, c = env.user()
+    assert c.post("/api/chat/cancel").json() == {"cancelled": False}
+    out = {}
+    t = threading.Thread(target=lambda: out.update(r=c.post("/api/chat", json={"messages": [{"role": "user", "content": "hi"}]})))
+    t0 = time.time()
+    t.start()
+    assert started.wait(5)
+    assert c.post("/api/chat/cancel").json() == {"cancelled": True}
+    t.join(10)
+    assert out["r"].status_code == 200 and out["r"].json()["stopped"] is True
+    assert time.time() - t0 < 3.5  # stopped well before the 4 s the model would otherwise take

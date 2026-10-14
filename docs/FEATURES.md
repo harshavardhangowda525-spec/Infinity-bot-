@@ -60,25 +60,26 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Blender integration | ⬜ | Blender is not installed in the dev environment |
 | JARVIS / ASTON / other agent integrations | ⬜ | none present in this repository |
 
-## INFINITY STUDIO dashboard (image 1)
+## INFINITY BOT dashboard (2026-10 redesign: clean AI workspace)
 
 | Feature | Status | Notes |
 |---|---|---|
-| Local backend: status, models, workspace, tree, file preview, tasks, approvals, cancel, rollback, event WebSocket | ✅ | `tests/test_server.py` (8 tests) |
+| Local backend: status, models, workspace, tree, file preview, tasks, approvals, cancel, rollback, event WebSocket | ✅ | `tests/test_server.py` |
 | Loopback-only bind, Host/Origin guard, session token on state changes | ✅ | |
-| 3D infinity core (React Three Fiber): glass ribbons, particles, light pulse | ✅ | lazy-loaded; low-power tier; SVG fallback without WebGL |
-| Core states from real data: idle, thinking, executing, success, error | ✅ | `deriveCoreState` unit tests; observed in a browser run |
-| Listening (mic amplitude plus speech-to-text) | 🟡 | only where the browser supports SpeechRecognition; not tested headlessly |
-| Speaking (read results aloud) | 🟡 | opt-in setting; pulses on real speech boundary events; not tested headlessly |
-| Reduced motion, hidden-tab pause, keyboard focus, ARIA labels | ✅ | |
-| Top bar: wordmark, real model pill, connection indicator, settings | ✅ | |
-| Model status popover (product vs implementation, runtime, agent, permission, errors) | ✅ | |
-| Command dock: Enter / Shift+Enter, modes, real checkpoint selector, attach project, Stop | ✅ | component tests |
-| Floating panels: Task, Change review (approve/reject, diffs, undo), Files, Code (highlighted), Execution stream | ✅ | no permanent sidebar; panels open on demand |
-| Project launcher: open folder with permission, recent projects, detection, last task | ✅ | |
-| Minimal ↔ workspace view switch; responsive desktop / tablet / mobile | ✅ | screenshots at 1440×900 and 390×844 |
+| Light and dark themes (design tokens; System / Light / Dark; applied before first paint) | ✅ | `src/index.css`, `src/lib/theme.ts`; screenshots in both themes |
+| Slim left navigation: logo, New chat, Chat history, Cook, Projects, Settings, recent chats, account menu | ✅ | collapsible rail (Ctrl+B); slide-out drawer on phones |
+| New-chat screen: heading, large composer, suggestion chips (removed once the chat starts) | ✅ | chips fill the composer; nothing is sent automatically |
+| Composer: multiline, Enter / Shift+Enter, Esc to stop, text-file attachment, voice input where supported, model selector, Normal/Cook switch | ✅ | component tests |
+| Conversation view: Markdown, highlighted code blocks with copy, copy reply, regenerate, edit-and-resend, stop generation, typing indicator | ✅ | safe renderer (no raw HTML); component tests |
+| Saved chat history: per-account, reopen after reload, search, rename, delete | ✅ | migration 3, `/api/conversations`, `tests/test_server.py` |
+| Stop generation (server-side cancel, not just hiding the reply) | ✅ | `/api/chat/cancel`; test proves generation ends early |
+| Cook workspace: activity (instruction, plan, steps, approvals, result) + Files / Code / Changes / Log | ✅ | real agent events only; purple accent; locked state for accounts without a plan |
+| Run / preview controls in Cook | ⬜ | the runtime has no preview server; commands run through the agent, and Stop cancels the task |
+| Model naming: Infinity Hyper 5.5 / Infinity Hyper 5.5 — Fine-Tuned / open models by their own name | ✅ | details in the model popover |
+| Read replies aloud | 🟡 | opt-in; browser speech; not tested headlessly |
+| Responsive: desktop, laptop, tablet, phone | ✅ | screenshots at 1440×900, 820×1180, 390×844; no horizontal scroll |
+| 3D infinity core | removed | replaced by the calmer design you asked for; three.js dependency dropped (−820 KB) |
 | Live website preview panel | ⬜ | |
-| Intelligence panel with benchmark history | ✅ | Intelligence view in the floating navigation |
 
 ## Platform (image 2)
 
@@ -106,6 +107,6 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Owner admin console: overview, users (grant, credits, suspend, sign out, workspaces), plans editor, audit log | ✅ | |
 | Hash-chained, append-only audit log with verification | ✅ | |
 | MFA, trusted devices | ⬜ | |
-| Normal (chat) mode | ✅ | `/api/chat` and the Chat mode in the dock. Every account can use it; usage is metered, and charged only on paid plans. Useful only with an open model: HYPER 5.5 tiny still produces nonsense |
+| Normal (chat) mode | ✅ | `/api/chat`, saved history. Every account can use it; usage is metered, and charged only on paid plans. HYPER 5.5 tiny still produces nonsense |
 | Admin: service restart, backups and restore, log search, config centre, notifications | ⬜ | |
 | JARVIS / ASTON / FRIDAY / DARWIN / ROBIN registry with heartbeats | 🟡 | they can be issued API keys; no heartbeat or registry service exists |
