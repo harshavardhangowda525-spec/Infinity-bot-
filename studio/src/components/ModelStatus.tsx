@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { modelName } from "../lib/format";
 import type { Status } from "../lib/types";
 
 function Row({ label, value, tone = "text-slate-200" }: { label: string; value: string; tone?: string }) {
@@ -15,8 +16,8 @@ export function modelPillText(status: Status | null): { text: string; tone: stri
   if (!status) return { text: "Runtime offline", tone: "text-red-300" };
   const m = status.model;
   if (m.state === "loading") return { text: "Loading model…", tone: "text-slate-300" };
-  if (m.state !== "ready") return { text: "INFINITY HYPER 5.5 · unavailable", tone: "text-amber-diag" };
-  return { text: `INFINITY HYPER 5.5 · step ${m.step} (LOCAL)`, tone: "text-slate-100" };
+  if (m.state !== "ready") return { text: "No model · unavailable", tone: "text-amber-diag" };
+  return { text: `${modelName(m)} (LOCAL)`, tone: "text-slate-100" };
 }
 
 /** Compact model pill that opens a status popover with real runtime facts only. */
@@ -44,7 +45,7 @@ export default function ModelStatus({ status, connected }: { status: Status | nu
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="glass flex max-w-[60vw] items-center gap-2 rounded-xl px-3 py-1.5 text-xs"
+        className="glass flex max-w-[60vw] items-center gap-2 rounded-xl px-3 py-1.5 text-xs lg:max-w-[15vw] xl:max-w-[19vw]"
       >
         <span className="hidden text-slate-500 sm:inline">MODEL:</span>
         <span className={`truncate ${pill.tone}`}>{pill.text}</span>
@@ -61,12 +62,19 @@ export default function ModelStatus({ status, connected }: { status: Status | nu
             className="glass-strong rounded-2xl popover p-4"
           >
             <h3 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-slate-400">INTELLIGENCE</h3>
-            <Row label="Product" value="INFINITY HYPER 5.5" />
+            <Row label="Model" value={m?.state === "ready" ? m.product ?? "" : "—"} />
             {m?.state === "ready" ? (
               <>
                 <Row label="Implementation" value={m.implementation ?? ""} />
                 <Row label="Locality" value="Local model connected" tone="text-emerald-300" />
-                <Row label="Run · step" value={`${m.run} · ${m.step}`} />
+                {m.family === "open-model" ? (
+                  <>
+                    <Row label="Base model" value={m.base ?? ""} />
+                    <Row label="Adapter" value={m.adapter ?? "none"} />
+                  </>
+                ) : (
+                  <Row label="Run · step" value={`${m.run} · ${m.step}`} />
+                )}
                 <Row label="Parameters" value={(m.parameters ?? 0).toLocaleString()} />
                 <Row label="Context window" value={`${m.context_length} tokens`} />
                 {m.metrics?.val_loss !== undefined && <Row label="Val loss (at save)" value={String(m.metrics.val_loss)} />}
@@ -74,6 +82,7 @@ export default function ModelStatus({ status, connected }: { status: Status | nu
             ) : (
               <Row label="Model" value={m?.state === "loading" ? "loading" : `Unavailable — ${m?.reason ?? "runtime offline"}`} tone="text-amber-diag" />
             )}
+            {m?.switch_error && <Row label="Last switch failed" value={m.switch_error} tone="text-amber-diag" />}
             <div className="my-2 border-t border-white/5" />
             <Row label="Runtime" value={connected ? "connected" : "disconnected"} tone={connected ? "text-emerald-300" : "text-red-300"} />
             <Row label="Agent" value={agentText} tone={agent?.awaiting_approval ? "text-amber-diag" : "text-slate-200"} />

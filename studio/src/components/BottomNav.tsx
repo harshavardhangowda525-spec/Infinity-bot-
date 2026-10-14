@@ -82,7 +82,7 @@ export default function BottomNav({ view, onView, isOwner, onLogout, email }: {
           }`}
         >
           {i.icon}
-          <span className="hidden md:inline">{i.label}</span>
+          <span className="hidden whitespace-nowrap md:inline">{i.label}</span>
         </button>
       ))}
       <span className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />

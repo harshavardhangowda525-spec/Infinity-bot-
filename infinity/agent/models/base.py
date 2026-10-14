@@ -136,10 +136,16 @@ class NeuralCoreModel(ModelAdapter):
 
 
 def load_model(spec: str) -> ModelAdapter:
-    """``neural:<checkpoint dir or run dir>`` or ``scripted:<json list file>``."""
+    """``neural:<checkpoint dir or run dir>``, ``scripted:<json list file>``, or
+    ``hf:<HF id or folder>[::<adapter folder>]`` for an open model (not HYPER 5.5)."""
     kind, _, arg = spec.partition(":")
     if kind == "neural":
         return NeuralCoreModel(arg)
     if kind == "scripted":
         return ScriptedModel.from_file(arg)
-    raise ValueError(f"unknown model spec {spec!r}; use neural:<checkpoint> or scripted:<file>")
+    if kind == "hf":
+        from ...hf.model import HFModel
+
+        base, _, adapter = arg.partition("::")
+        return HFModel(base, adapter or None, base_dir=Path.cwd())
+    raise ValueError(f"unknown model spec {spec!r}; use neural:<checkpoint>, hf:<model>[::<adapter>] or scripted:<file>")

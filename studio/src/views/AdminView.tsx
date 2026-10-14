@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { allowance, date, inr, num } from "../lib/format";
+import { allowance, date, inr, num, modelName } from "../lib/format";
 import type { AdminOverview, AdminUser, AuditEvent, Plan } from "../lib/types";
 
 type Tab = "overview" | "users" | "plans" | "audit";
@@ -183,7 +183,7 @@ export default function AdminView() {
             <div className="grid gap-3 md:grid-cols-2">
               <div className="glass rounded-2xl p-4 text-xs text-slate-300">
                 <h2 className="mb-2 text-[10px] tracking-[0.18em] text-slate-500">SYSTEM</h2>
-                <p>Model: {ov.model.state === "ready" ? `INFINITY HYPER 5.5 · ${ov.model.run} step ${ov.model.step}` : `unavailable — ${ov.model.reason}`}</p>
+                <p>Model: {ov.model.state === "ready" ? modelName(ov.model) : `unavailable — ${ov.model.reason}`}</p>
                 <p>Payment provider: {ov.payment_provider.configured ? "webhook configured" : "not connected (development mode)"}</p>
                 <p>Audit chain: {ov.audit_chain.ok ? `intact (${ov.audit_chain.checked} records)` : `BROKEN at record ${ov.audit_chain.broken_at}`}</p>
                 <p>Ledger duplicate charges: {ov.ledger_duplicates.length}</p>

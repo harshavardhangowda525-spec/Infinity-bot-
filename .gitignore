@@ -10,3 +10,11 @@ data/prepared/
 .env
 .env.*
 !.env.example
+# open-model training outputs (weights, checkpoints, logs, generated data)
+training/checkpoints/
+training/logs/
+training/data/
+training/evaluation/results/
+adapters/
+training/tiny-model/
+training/data-tiny/

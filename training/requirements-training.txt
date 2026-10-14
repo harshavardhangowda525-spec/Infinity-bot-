@@ -1,0 +1,9 @@
+# Open-model fine-tuning and serving for INFINITY BOT (on top of the existing install).
+# Versions are the ones the pipeline was tested with (Python 3.13, CPU).
+# Install into the SAME virtual environment: pip install -r training/requirements-training.txt
+# torch is already installed by INFINITY BOT and is not reinstalled here.
+transformers==5.19.0
+peft==0.21.2
+safetensors>=0.4
+pyyaml>=6.0
+psutil>=5.9

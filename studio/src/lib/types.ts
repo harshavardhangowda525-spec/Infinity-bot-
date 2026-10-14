@@ -1,4 +1,6 @@
 export type Mode = "ask" | "plan" | "review" | "code" | "debug" | "build" | "autonomous";
+/** Dock modes: "chat" is Normal chat (plain conversation); the rest are COOK agent modes. */
+export type DockMode = Mode | "chat";
 export type Permission = "read-only" | "ask" | "auto";
 
 export interface ModelStatus {
@@ -13,6 +15,29 @@ export interface ModelStatus {
   parameters?: number;
   context_length?: number;
   metrics?: Record<string, unknown>;
+  /** "open-model" for Hugging Face models (never INFINITY HYPER 5.5); absent for HYPER 5.5. */
+  family?: string;
+  id?: string;
+  base?: string;
+  adapter?: string | null;
+  device?: string;
+  switch_error?: string;
+}
+
+export interface OpenModel {
+  id: string;
+  label: string;
+  base: string;
+  adapter: string | null;
+  adapter_present: boolean | null;
+  context_tokens: number;
+  license?: string;
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
 }
 
 export interface TaskSummary {

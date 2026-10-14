@@ -1,0 +1,21 @@
+{
+  "_note": "Open Hugging Face models selectable in INFINITY BOT. They are NOT INFINITY HYPER 5.5 and are always labelled by their real name. Paths are relative to the project root. Needs: pip install -r training/requirements-training.txt",
+  "models": [
+    {
+      "id": "qwen-coder-0.5b",
+      "label": "Qwen2.5-Coder 0.5B Instruct",
+      "base": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+      "adapter": null,
+      "context_tokens": 4096,
+      "license": "Apache-2.0 (verify on the model card before use)"
+    },
+    {
+      "id": "qwen-coder-0.5b-combined",
+      "label": "Qwen2.5-Coder 0.5B Instruct",
+      "base": "Qwen/Qwen2.5-Coder-0.5B-Instruct",
+      "adapter": "adapters/infinity-hyper-5-5/qwen-coder-0.5b-combined",
+      "context_tokens": 4096,
+      "license": "Apache-2.0 base + your own LoRA adapter"
+    }
+  ]
+}

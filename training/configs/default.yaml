@@ -1,0 +1,35 @@
+# Combined chat + coding + tool-use LoRA adapter for an open model.
+# Every path is relative to the project root. Values not set here use the defaults in
+# infinity/hf/config.py.
+
+base_model: Qwen/Qwen2.5-Coder-0.5B-Instruct   # Hugging Face id (downloaded once) or a local folder
+model_label: Qwen2.5-Coder 0.5B Instruct
+run_name: qwen-coder-0.5b-combined
+# Prompt length budget. Keep it equal to "context_tokens" in configs/open-models.json so the
+# training prompts match what the bot sends at inference time.
+context_tokens: 4096
+
+data:
+  train_domains: [chat, coding, tool]
+  tool_tasks_train: 120      # expert bug-fix transcripts replayed through the real runtime
+  tool_tasks_val: 10
+  max_seq_len: 2048          # longer examples are dropped (and counted in the report)
+
+training:
+  max_steps: 100             # conservative for CPU; the script prints s/step and an ETA
+  batch_size: 1
+  grad_accum_steps: 4
+  learning_rate: 2.0e-4
+  warmup_steps: 10
+  eval_interval: 25
+  eval_examples: 20
+  checkpoint_interval: 25
+  gradient_checkpointing: true
+  precision: auto            # fp32 on CPU; bf16 (or fp16 + loss scaling) on a CUDA GPU
+  seed: 1337
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]

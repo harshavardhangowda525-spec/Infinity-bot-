@@ -16,6 +16,27 @@ from ..agent.project import detect_project
 APPROVAL_TIMEOUT_S = 300.0
 
 
+def open_models(base: Path) -> list[dict]:
+    """Entries of configs/open-models.json, with whether their adapter folder exists."""
+    import json
+
+    path = base / "configs" / "open-models.json"
+    if not path.exists():
+        return []
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8")).get("models", [])
+    except ValueError:
+        return []
+    out = []
+    for e in entries:
+        if not isinstance(e, dict) or not e.get("id") or not e.get("base"):
+            continue
+        adapter = e.get("adapter")
+        out.append({**e, "adapter_present": bool(adapter) and (base / adapter).is_dir()} if adapter else
+                   {**e, "adapter_present": None})
+    return out
+
+
 def find_checkpoints(base: Path) -> list[dict]:
     """All verified-looking checkpoints under <base>/runs/*/checkpoints."""
     out = []
@@ -239,6 +260,7 @@ class RuntimeHub:
         self.runtimes: dict[int, Runtime] = {}
         self.model: ModelAdapter | None = None
         self.model_error: str | None = "no checkpoint loaded"
+        self.open_error: str | None = None  # last failed open-model switch (shown in the UI)
 
     def get(self, user_id: int) -> Runtime:
         with self.lock:
@@ -259,7 +281,17 @@ class RuntimeHub:
     def any_busy(self) -> bool:
         return any(rt.busy for rt in self.runtimes.values())
 
-    def load_model(self, checkpoint: str) -> None:
+    def _remember(self, selection: dict) -> None:
+        import json as _json
+
+        path = self.base_dir / "runs" / "SELECTED_MODEL.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(_json.dumps(selection), encoding="utf-8")
+        except OSError:
+            pass
+
+    def load_model(self, checkpoint: str, remember: bool = False) -> None:
         if self.any_busy():
             raise RuntimeError("cannot switch model while a task is running")
         try:
@@ -268,9 +300,55 @@ class RuntimeHub:
             self.set_model(None, str(e))
             raise
         self.set_model(model, None)
+        if remember:
+            self._remember({"kind": "neural", "checkpoint": checkpoint})
 
-    def autoload_latest(self) -> None:
-        """Load the explicitly promoted checkpoint (runs/ACTIVE.json) if any, else the newest one."""
+    def load_open(self, model_id: str, remember: bool = False) -> None:
+        """Switch to an open model from configs/open-models.json.
+
+        If it fails (missing packages, download blocked, broken adapter) the current model
+        stays loaded. If nothing was loaded, INFINITY HYPER 5.5 is loaded as the fallback.
+        Either way the error is raised so the caller can show it.
+        """
+        if self.any_busy():
+            raise RuntimeError("cannot switch model while a task is running")
+        entry = next((e for e in open_models(self.base_dir) if e["id"] == model_id), None)
+        if entry is None:
+            raise KeyError(model_id)
+        from ..hf.model import HFModel
+
+        try:
+            model = HFModel(entry["base"], entry.get("adapter"), label=entry.get("label"),
+                            context_tokens=int(entry.get("context_tokens", 4096)), base_dir=self.base_dir,
+                            model_id=model_id)
+        except ModelUnavailable as e:
+            self.open_error = f"{entry.get('label', model_id)}: {e}"
+            if self.model is None:
+                self.autoload_latest(ignore_selection=True)
+            raise ModelUnavailable(f"{e} — kept the current model") from e
+        self.open_error = None
+        self.set_model(model, None)
+        if remember:
+            self._remember({"kind": "open", "id": model_id})
+
+    def autoload_latest(self, ignore_selection: bool = False) -> None:
+        """Load the owner's last selection (runs/SELECTED_MODEL.json) if it still loads; otherwise the
+        explicitly promoted checkpoint (runs/ACTIVE.json) if any, else the newest one."""
+        sel = self.base_dir / "runs" / "SELECTED_MODEL.json"
+        if not ignore_selection and sel.exists():
+            import json as _json
+
+            try:
+                choice = _json.loads(sel.read_text(encoding="utf-8"))
+                if choice.get("kind") == "open":
+                    self.load_open(choice["id"])
+                    return
+                if choice.get("kind") == "neural" and Path(choice["checkpoint"]).exists():
+                    self.load_model(choice["checkpoint"])
+                    return
+            except (ModelUnavailable, KeyError, ValueError, RuntimeError):
+                if self.model is not None:
+                    return  # load_open already fell back to HYPER 5.5
         active = self.base_dir / "runs" / "ACTIVE.json"
         if active.exists():
             import json as _json
@@ -292,8 +370,12 @@ class RuntimeHub:
 
     def model_status(self) -> dict:
         if self.model is None:
-            return {"state": "unavailable", "reason": self.model_error}
-        return {"state": "ready", "locality": "local", **self.model.info()}
+            st = {"state": "unavailable", "reason": self.model_error}
+        else:
+            st = {"state": "ready", "locality": "local", **self.model.info()}
+        if self.open_error:
+            st["switch_error"] = self.open_error
+        return st
 
     def active_tasks(self) -> list[dict]:
         out = []

@@ -268,3 +268,30 @@ def test_audit_chain_detects_tampering(p):
     p.db.run("UPDATE audit_log SET reason = 'edited' WHERE id = 1")
     v = p.audit.verify()
     assert not v["ok"] and v["broken_at"] == 1
+
+
+def test_migration_2_keeps_usage_rows_and_allows_chat(tmp_path, monkeypatch):
+    import sqlite3
+
+    from infinity.platform import db as dbmod
+
+    path = tmp_path / "old.db"
+    monkeypatch.setattr(dbmod, "MIGRATIONS", dbmod.MIGRATIONS[:1])
+    old = dbmod.PlatformDB(path)
+    old.run("INSERT INTO users (email, password_hash, role, status, created_at) VALUES ('a@b.c', 'x', 'user', 'active', 1)")
+    old.run("INSERT INTO usage_events (user_id, source, ref, tokens_in, tokens_out, exact, ok, created_at) "
+            "VALUES (1, 'cook', 'task:1', 5, 7, 1, 1, 2)")
+    with pytest.raises(sqlite3.IntegrityError):
+        old.run("INSERT INTO usage_events (user_id, source, ref, tokens_in, tokens_out, exact, ok, created_at) "
+                "VALUES (1, 'chat', 'c', 1, 1, 1, 1, 3)")
+    old.conn.close()
+    monkeypatch.undo()
+    new = dbmod.PlatformDB(path)
+    assert [m["version"] for m in new.migrations()] == [1, 2]
+    rows = new.all("SELECT source, ref, tokens_in, tokens_out FROM usage_events")
+    assert [dict(r) for r in rows] == [{"source": "cook", "ref": "task:1", "tokens_in": 5, "tokens_out": 7}]
+    new.run("INSERT INTO usage_events (user_id, source, ref, tokens_in, tokens_out, exact, ok, created_at) "
+            "VALUES (1, 'chat', 'c', 1, 1, 1, 1, 3)")
+    with pytest.raises(sqlite3.IntegrityError):
+        new.run("INSERT INTO usage_events (user_id, source, ref, tokens_in, tokens_out, exact, ok, created_at) "
+                "VALUES (1, 'other', 'c', 1, 1, 1, 1, 3)")

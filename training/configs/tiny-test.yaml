@@ -1,0 +1,15 @@
+# Offline pipeline test with the random tiny model (python training/scripts/make_tiny_model.py).
+extends: default.yaml
+base_model: training/tiny-model
+model_label: Tiny test model (random weights)
+run_name: tiny-test
+data:
+  tool_tasks_train: 6
+  tool_tasks_val: 2
+  out_dir: training/data-tiny
+  max_seq_len: 4096
+training:
+  max_steps: 6
+  eval_interval: 3
+  checkpoint_interval: 3
+  eval_examples: 4

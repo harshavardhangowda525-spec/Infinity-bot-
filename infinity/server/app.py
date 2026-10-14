@@ -29,7 +29,7 @@ from ..agent.checkpoints import CheckpointStore, list_sessions
 from ..agent.permissions import BINARY_EXTS, IGNORED_DIRS, PathError, is_sensitive_path
 from ..agent.project import detect_project
 from ..platform import AuthError, BillingError, KeyError_, Platform, User
-from .runtime import RuntimeHub, find_checkpoints
+from .runtime import RuntimeHub, find_checkpoints, open_models
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]", "testserver"}
 COOKIE = "infinity_session"
@@ -48,7 +48,18 @@ class WorkspaceIn(BaseModel):
 
 
 class ModelIn(BaseModel):
-    checkpoint: str
+    checkpoint: str | None = None
+    open_model: str | None = Field(default=None, max_length=100)
+
+
+class ChatMessage(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    content: str = Field(min_length=1, max_length=12000)
+
+
+class ChatIn(BaseModel):
+    messages: list[ChatMessage] = Field(min_length=1, max_length=60)
+    max_new_tokens: int = Field(default=512, ge=16, le=2048)
 
 
 class TaskIn(BaseModel):
@@ -316,20 +327,67 @@ def create_app(hub: RuntimeHub, platform: Platform, static_dir: Path | None = No
 
     @app.get("/api/models")
     def models(user: User = Depends(user_dep)):
-        return {"active": hub.model_status(), "checkpoints": find_checkpoints(hub.base_dir), "can_switch": user.is_owner}
+        return {"active": hub.model_status(), "checkpoints": find_checkpoints(hub.base_dir),
+                "open_models": open_models(hub.base_dir), "can_switch": user.is_owner}
 
     @app.post("/api/model")
     def set_model(body: ModelIn, request: Request, user: User = Depends(owner_write)):
-        allowed = {c["path"] for c in find_checkpoints(hub.base_dir)}
-        if str(Path(body.checkpoint)) not in allowed:
-            raise HTTPException(404, "unknown checkpoint")
+        if bool(body.checkpoint) == bool(body.open_model):
+            raise HTTPException(422, "give exactly one of checkpoint or open_model")
+        target = body.checkpoint or f"open:{body.open_model}"
         try:
-            hub.load_model(body.checkpoint)
-        except RuntimeError as e:
-            P.audit.record(user.id, "model.switch", body.checkpoint, success=False, reason=str(e), request_id=request.state.request_id)
+            if body.open_model:
+                if body.open_model not in {e["id"] for e in open_models(hub.base_dir)}:
+                    raise HTTPException(404, "unknown open model")
+                hub.load_open(body.open_model, remember=True)
+            else:
+                if str(Path(body.checkpoint)) not in {c["path"] for c in find_checkpoints(hub.base_dir)}:
+                    raise HTTPException(404, "unknown checkpoint")
+                hub.load_model(body.checkpoint, remember=True)
+        except RuntimeError as e:  # includes ModelUnavailable (the previous model stays loaded)
+            P.audit.record(user.id, "model.switch", target, success=False, reason=str(e)[:300],
+                           request_id=request.state.request_id)
             raise HTTPException(409, str(e))
-        P.audit.record(user.id, "model.switch", body.checkpoint, request_id=request.state.request_id)
+        P.audit.record(user.id, "model.switch", target, request_id=request.state.request_id)
         return hub.model_status()
+
+    @app.post("/api/chat")
+    def chat(body: ChatIn, request: Request, user: User = Depends(write_dep)):
+        """Normal chat: a plain conversation with the loaded model (no files, no tools).
+
+        Available to every signed-in account. Usage is always recorded. Credits are charged
+        only on paid plans (free accounts are not charged), and the owner is exempt.
+        """
+        from ..agent.models import Message
+        from ..hf.chat import system_prompt_for
+
+        model = hub.model
+        if model is None:
+            raise HTTPException(503, f"no model loaded: {hub.model_error}")
+        info = model.info()
+        system = Message("system", system_prompt_for(info))
+        turns = [Message(m.role, m.content) for m in body.messages]
+        if turns[-1].role != "user":
+            raise HTTPException(422, "the last message must be from the user")
+        max_new = max(16, min(body.max_new_tokens, model.max_context_tokens // 2))
+        budget = model.max_context_tokens - max_new - 32
+        count = lambda ms: sum(model.count_tokens(m.content)[0] + 8 for m in ms)
+        while len(turns) > 1 and count([system] + turns) > budget:
+            turns = turns[2:] if len(turns) > 2 else turns[1:]  # drop the oldest exchange
+        try:
+            comp = model.complete([system] + turns, max_new_tokens=max_new)
+        except Exception as e:
+            raise HTTPException(500, f"generation failed: {type(e).__name__}: {e}")
+        ref = f"chat:{request.state.request_id}"
+        P.keys.record_usage(user.id, "chat", ref, comp.tokens_in, comp.tokens_out, comp.tokens_exact)
+        ent = P.billing.entitlement(user.id)
+        charged = 0
+        if not user.is_owner and (ent.plan.get("monthly_price_inr") or 0) > 0:
+            charged = comp.tokens_in + comp.tokens_out
+            P.billing.charge(user.id, charged, f"usage:{ref}", "Normal chat", ref)
+        return {"reply": comp.text, "model": {"product": info.get("product"), "family": info.get("family", "infinity")},
+                "usage": {"tokens_in": comp.tokens_in, "tokens_out": comp.tokens_out, "exact": comp.tokens_exact,
+                          "credits_charged": charged, "context_turns_used": len(turns)}}
 
     @app.get("/api/intelligence")
     def intelligence(user: User = Depends(user_dep)):

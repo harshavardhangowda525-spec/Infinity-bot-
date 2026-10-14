@@ -49,3 +49,31 @@ not yet been run on a real Windows machine in CI.
 **`infinity sft generate` stops with "no training data would be produced".** The first
 expert runs all failed, which means the task tests could not run on this machine. Check
 that `python3 -m unittest -q` (or `python -m unittest -q` on Windows) works in a terminal.
+
+## Open models (Qwen + LoRA)
+
+This file is also the `troubleshooting.md` the training plan asked for. A second file
+differing only in letter case would clash on Windows.
+
+**"open models need transformers + peft".** Run `pip install -r training/requirements-training.txt` in the INFINITY venv.
+
+**The model switch fails with a download or connection error.** The first load downloads the
+base model from huggingface.co (about 1 GB). Check your internet connection. To work
+offline, download the model folder once and set `"base"` in `configs/open-models.json`
+to that folder (relative to the project root). The current model stays loaded when a switch fails.
+
+**The adapter entry is greyed out.** Its folder under `adapters/infinity-hyper-5-5/` doesn't
+exist yet. Train it first, or point `"adapter"` at the folder you trained.
+
+**Training is slow.** On a CPU each step can take tens of seconds; the script prints the
+measured speed and an ETA. Lower `training.max_steps`, `data.tool_tasks_train` or
+`data.max_seq_len` in the YAML config. Ctrl+C saves a checkpoint; `--resume` continues.
+
+**"out of memory".** Nothing is deleted. Lower `data.max_seq_len` (for example 1024) or keep
+`batch_size: 1`, close other programs, then rerun with `--resume`.
+
+**"chat template is not prefix-stable".** The base model's chat template rewrites earlier
+turns (some reasoning models do this), so assistant tokens cannot be located safely. Use a
+model whose template only appends (Qwen2.5 does).
+
+**The evaluate script refuses to run: "already exists".** Saved results are never overwritten. Choose a new `--label`.

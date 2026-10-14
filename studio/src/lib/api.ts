@@ -1,5 +1,5 @@
 import type {
-  AdminOverview, AdminUser, Intelligence, AgentEvent, ApiKey, AuditEvent, BillingMe, Catalog, Checkpoint, CheckoutResult, Me, Mode,
+  AdminOverview, AdminUser, Intelligence, AgentEvent, ApiKey, AuditEvent, BillingMe, Catalog, ChatTurn, Checkpoint, CheckoutResult, Me, Mode, OpenModel,
   Permission, Plan, Project, RecentProject, Status, TreeNode,
 } from "./types";
 
@@ -49,9 +49,18 @@ export function clearSession() {
 
 export const api = {
   status: () => request<Status>("/api/status"),
-  models: () => request<{ active: Status["model"]; checkpoints: Checkpoint[] }>("/api/models"),
-  setModel: (checkpoint: string) =>
-    request<Status["model"]>("/api/model", { method: "POST", body: JSON.stringify({ checkpoint }) }),
+  models: () => request<{ active: Status["model"]; checkpoints: Checkpoint[]; open_models?: OpenModel[]; can_switch: boolean }>("/api/models"),
+  /** value: a HYPER 5.5 checkpoint path, or "open:<id>" for an open model from configs/open-models.json */
+  setModel: (value: string) =>
+    request<Status["model"]>("/api/model", {
+      method: "POST",
+      body: JSON.stringify(value.startsWith("open:") ? { open_model: value.slice(5) } : { checkpoint: value }),
+    }),
+  chat: (messages: ChatTurn[], max_new_tokens = 512) =>
+    request<{ reply: string; model: { product: string; family: string }; usage: { tokens_in: number; tokens_out: number; credits_charged: number } }>(
+      "/api/chat",
+      { method: "POST", body: JSON.stringify({ messages: messages.map(({ role, content }) => ({ role, content })), max_new_tokens }) },
+    ),
   projects: () => request<{ recent: RecentProject[]; current: string | null }>("/api/projects"),
   project: () => request<Project>("/api/project"),
   setWorkspace: (path: string, permission?: Permission) =>

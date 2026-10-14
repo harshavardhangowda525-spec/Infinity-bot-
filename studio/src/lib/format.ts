@@ -7,6 +7,13 @@ export const num = (n: number) => numFmt.format(n);
 export const date = (unix: number | null | undefined) => (unix ? new Date(unix * 1000).toLocaleString() : "—");
 export const day = (unix: number) => new Date(unix * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
+/** The loaded model's real name: open models by their own label, never as INFINITY HYPER 5.5. */
+export function modelName(m: { state: string; family?: string; product?: string; step?: number } | null | undefined): string {
+  if (!m || m.state !== "ready") return "No model loaded";
+  if (m.family === "open-model") return m.product ?? "Open model";
+  return `INFINITY HYPER 5.5 · step ${m.step}`;
+}
+
 /** Allowance text that never invents a number. */
 export const allowance = (credits: number | null | undefined) =>
   credits === null || credits === undefined ? "Not configured yet" : `${num(credits)} credits / month`;

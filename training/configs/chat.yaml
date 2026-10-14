@@ -1,0 +1,5 @@
+# Separate adapter experiment: chat examples only.
+extends: default.yaml
+run_name: qwen-coder-0.5b-chat
+data:
+  train_domains: [chat]

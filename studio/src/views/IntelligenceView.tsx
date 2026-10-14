@@ -43,11 +43,11 @@ export default function IntelligenceView() {
     <div className="scroll-thin h-full overflow-y-auto">
       <div className="mx-auto grid max-w-6xl gap-4 px-4 pb-32 pt-16 sm:px-6 lg:grid-cols-3">
         <section className="glass rounded-2xl p-5" aria-labelledby="model-h">
-          <h2 id="model-h" className="text-[11px] font-semibold tracking-[0.2em] text-slate-400">INFINITY HYPER 5.5</h2>
+          <h2 id="model-h" className="text-[11px] font-semibold tracking-[0.2em] text-slate-400">{m.state === "ready" && m.family === "open-model" ? m.product : "INFINITY HYPER 5.5"}</h2>
           {m.state === "ready" ? (
             <>
               <Row k="Implementation" v={m.implementation ?? ""} />
-              <Row k="Run · step" v={`${m.run} · ${m.step}`} />
+              {m.family === "open-model" ? <Row k="Base · adapter" v={`${m.base} · ${m.adapter ?? "none"}`} /> : <Row k="Run · step" v={`${m.run} · ${m.step}`} />}
               <Row k="Parameters" v={num(m.parameters ?? 0)} />
               <Row k="Context window" v={`${m.context_length} tokens`} />
               <Row k="Tokenizer" v={String(m.tokenizer_fingerprint ?? "")} />

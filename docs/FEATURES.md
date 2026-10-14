@@ -26,6 +26,16 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Multi-GPU training: DDP + FSDP2, bf16/fp16, resume across world sizes, time budget | 🟡 | verified with 2 CPU processes (gloo); NCCL/GPU runs untested here |
 | Kaggle notebook for the 100M model | ✅ | smoke-tested cell by cell; real Kaggle GPU run not done |
 
+## Open model option (not HYPER 5.5)
+
+| Feature | Status | Notes |
+|---|---|---|
+| Open Hugging Face model as a selectable, honestly labelled model (Qwen2.5-Coder 0.5B) | 🟡 | `infinity/hf/model.py`, `configs/open-models.json`. Tested with a tiny offline model; the real Qwen download is untested here |
+| Switch with fallback; owner's choice persisted | ✅ | `tests/test_hf.py` |
+| LoRA SFT pipeline: data validation, dedupe, leak checks, assistant-only loss, dry-run, smoke, resume, OOM handling | ✅ | `training/scripts/*.py`. Pipeline tested with the tiny model only |
+| Evaluation suite (24 held-out cases + live repair) with sandboxed code tests | ✅ | `training/scripts/evaluate.py`. HYPER 5.5 tiny measured 0/24 |
+| Trained Qwen adapter and baseline-vs-adapter results | ⬜ | to be run on the owner's PC |
+
 ## INFINITY BRAIN (agent runtime)
 
 | Feature | Status | Notes |
@@ -95,6 +105,6 @@ Legend: ✅ implemented and tested · 🟡 partially implemented · ⬜ not impl
 | Owner admin console: overview, users (grant, credits, suspend, sign out, workspaces), plans editor, audit log | ✅ | |
 | Hash-chained, append-only audit log with verification | ✅ | |
 | MFA, trusted devices | ⬜ | |
-| Normal (chat) mode | ⬜ | the current model cannot hold a conversation; COOK is the home mode |
+| Normal (chat) mode | ✅ | `/api/chat` and the Chat mode in the dock. Every account can use it; usage is metered, and charged only on paid plans. Useful only with an open model: HYPER 5.5 tiny still produces nonsense |
 | Admin: service restart, backups and restore, log search, config centre, notifications | ⬜ | |
 | JARVIS / ASTON / FRIDAY / DARWIN / ROBIN registry with heartbeats | 🟡 | they can be issued API keys; no heartbeat or registry service exists |

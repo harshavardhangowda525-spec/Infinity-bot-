@@ -1,0 +1,5 @@
+# Separate adapter experiment: coding examples + tool-use transcripts.
+extends: default.yaml
+run_name: qwen-coder-0.5b-coding
+data:
+  train_domains: [coding, tool]

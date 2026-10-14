@@ -3,9 +3,9 @@ import { useRef } from "react";
 import CommandDock from "../components/CommandDock";
 import { eventsToLines } from "../components/ExecutionStream";
 import { modelPillText } from "../components/ModelStatus";
-import type { Mode, Status } from "../lib/types";
+import type { DockMode, Status } from "../lib/types";
 
-function Dock(props: { onSubmit: (t: string) => void; busy?: boolean; disabledReason?: string | null; onMode?: (m: Mode) => void; onCancel?: () => void }) {
+function Dock(props: { onSubmit: (t: string) => void; busy?: boolean; disabledReason?: string | null; onMode?: (m: DockMode) => void; onCancel?: () => void }) {
   const amp = useRef(0);
   return (
     <CommandDock
@@ -86,5 +86,35 @@ describe("modelPillText", () => {
     expect(modelPillText(s).text).toContain("unavailable");
     const r = { model: { state: "ready", step: 1500 } } as unknown as Status;
     expect(modelPillText(r).text).toBe("INFINITY HYPER 5.5 · step 1500 (LOCAL)");
+  });
+});
+
+describe("open models are never shown as INFINITY HYPER 5.5", () => {
+  it("labels the pill with the open model's own name", () => {
+    const s = { model: { state: "ready", family: "open-model", product: "Qwen2.5-Coder 0.5B Instruct + INFINITY adapter" } } as unknown as Status;
+    expect(modelPillText(s).text).toBe("Qwen2.5-Coder 0.5B Instruct + INFINITY adapter (LOCAL)");
+    expect(modelPillText(s).text).not.toContain("HYPER");
+  });
+
+  it("offers Chat mode and lists open models separately, disabling untrained adapters", () => {
+    const amp = { current: 0 };
+    render(
+      <CommandDock
+        mode="chat" onMode={() => {}} onSubmit={() => {}} onCancel={() => {}} busy={false} disabledReason={null}
+        model={{ state: "ready", family: "open-model", id: "qwen", product: "Qwen" }}
+        checkpoints={[]}
+        openModels={[
+          { id: "qwen", label: "Qwen2.5-Coder 0.5B Instruct", base: "Qwen/x", adapter: null, adapter_present: null, context_tokens: 4096 },
+          { id: "qwen-a", label: "Qwen2.5-Coder 0.5B Instruct", base: "Qwen/x", adapter: "adapters/a", adapter_present: false, context_tokens: 4096 },
+        ]}
+        onSelectModel={() => {}} onAttach={() => {}} workspaceName={null} taskText={null} onListening={() => {}} amplitude={amp}
+      />,
+    );
+    expect(screen.getByRole("radio", { name: "Chat" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByPlaceholderText("Message INFINITY BOT…")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Open models (not HYPER 5.5)" })).toBeTruthy();
+    const untrained = screen.getByRole("option", { name: "Qwen2.5-Coder 0.5B Instruct + adapter (not trained yet)" }) as HTMLOptionElement;
+    expect(untrained.disabled).toBe(true);
+    expect((screen.getByLabelText("Model") as HTMLSelectElement).value).toBe("open:qwen");
   });
 });

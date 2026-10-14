@@ -125,3 +125,16 @@ LoRA and QLoRA cut memory for models with billions of parameters.
 
 Per the instructions, training setup has stopped at this point. No dependencies were
 installed, and no training workspace was created.
+
+## 6. Decision (2026-10-14): option C
+
+The owner chose option C with **Qwen2.5-Coder 0.5B Instruct** as the base. What was built:
+
+- An open model plus an optional LoRA adapter, selectable next to INFINITY HYPER 5.5.
+- HYPER 5.5 is unchanged and remains the default and the fallback.
+- The open model is always labelled by its real name.
+
+Licence: Qwen2.5-Coder 0.5B Instruct is published under Apache-2.0. **Re-check the model
+card before use.** It could not be fetched from the build environment.
+
+See `docs/training_guide.md`, `docs/dataset_guide.md`, `docs/evaluation_report.md` and `docs/cook_security.md`.

@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
+import ChatPanel from "./components/ChatPanel";
 import CommandDock from "./components/CommandDock";
 import InfinityCore from "./components/InfinityCore";
 import ModelStatus from "./components/ModelStatus";
@@ -9,9 +10,9 @@ import TaskWorkspace, { PANELS, type PanelId } from "./components/TaskWorkspace"
 import BottomNav, { type View } from "./components/BottomNav";
 import UpgradeOverlay from "./components/UpgradeOverlay";
 import { api } from "./lib/api";
-import { num } from "./lib/format";
+import { modelName, num } from "./lib/format";
 import { useStore } from "./lib/store";
-import type { Checkpoint, Me, Mode } from "./lib/types";
+import type { ChatTurn, Checkpoint, DockMode, Me, OpenModel } from "./lib/types";
 import AdminView from "./views/AdminView";
 import IntelligenceView from "./views/IntelligenceView";
 import KeysView from "./views/KeysView";
@@ -25,8 +26,13 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
   const [view, setView] = useState<View>("home");
   const [upgrade, setUpgrade] = useState(false);
   const { status, connected } = store;
-  const [mode, setMode] = useState<Mode>("code");
+  // Accounts without COOK start in Normal chat, which every signed-in account can use.
+  const [mode, setMode] = useState<DockMode>(me.entitlement.cook ? "code" : "chat");
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
+  const [openModels, setOpenModels] = useState<OpenModel[]>([]);
+  const [chat, setChat] = useState<ChatTurn[]>([]);
+  const [chatWaiting, setChatWaiting] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const [launcher, setLauncher] = useState(false);
   const [settings, setSettingsState] = useState<Settings>(loadSettings);
   const [open, setOpen] = useState<Set<PanelId>>(() => new Set(loadSettings().view === "workspace" ? ALL_PANELS : []));
@@ -42,7 +48,13 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
   };
 
   const loadModels = useCallback(() => {
-    api.models().then((m) => setCheckpoints(m.checkpoints), () => setCheckpoints([]));
+    api.models().then(
+      (m) => {
+        setCheckpoints(m.checkpoints);
+        setOpenModels(m.open_models ?? []);
+      },
+      () => setCheckpoints([]),
+    );
   }, []);
   useEffect(loadModels, [loadModels, connected]);
 
@@ -84,18 +96,42 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
   const ent = (status as (typeof status & { entitlement?: Me["entitlement"] }) | null)?.entitlement ?? me.entitlement;
   const isOwner = me.user.role === "owner";
   const busy = status?.agent.busy ?? false;
-  const disabledReason = !ent.cook
+  const isChat = mode === "chat";
+  const disabledReason = switching
+    ? "Switching model…"
+    : isChat
+    ? !connected
+      ? "INFINITY runtime is not reachable — start it with `infinity studio`"
+      : status?.model.state !== "ready"
+        ? `No model loaded: ${status?.model.reason ?? "loading"}`
+        : null
+    : !ent.cook
     ? null // gate shown as a hint; submitting opens the upgrade screen (the server enforces it too)
     : !connected
     ? "INFINITY runtime is not reachable — start it with `infinity studio`"
     : !status?.workspace
       ? "Attach a project first (paperclip below, or Ctrl+O)"
       : status.model.state !== "ready"
-        ? `INFINITY HYPER 5.5 unavailable: ${status.model.reason ?? "loading"}`
+        ? `Model unavailable: ${status.model.reason ?? "loading"}`
         : null;
+
+  const sendChat = async (text: string) => {
+    const history: ChatTurn[] = [...chat, { role: "user", content: text }];
+    setChat(history);
+    setChatWaiting(true);
+    try {
+      const r = await api.chat(history);
+      setChat([...history, { role: "assistant", content: r.reply, model: r.model.product }]);
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setChatWaiting(false);
+    }
+  };
 
   const submit = async (text: string) => {
     setNotice(null);
+    if (mode === "chat") return sendChat(text);
     if (!ent.cook) {
       setUpgrade(true);
       return;
@@ -110,13 +146,18 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
     }
   };
 
-  const selectModel = async (path: string) => {
+  const selectModel = async (value: string) => {
+    if (value.startsWith("open:")) setNotice("Loading the open model… the first time, it is downloaded (about 1 GB). This can take a few minutes.");
+    setSwitching(true);
     try {
-      await api.setModel(path);
+      await api.setModel(value);
+      setNotice(null);
       await store.refresh();
       setSweep((s) => s + 1);
     } catch (e) {
       setNotice((e as Error).message);
+    } finally {
+      setSwitching(false);
     }
   };
 
@@ -149,7 +190,7 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
             {connected ? "CONNECTED" : "OFFLINE"}
           </span>
           <button onClick={() => setView("tokens")} title="Plan and remaining credits"
-            className="glass hidden items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] tracking-wider text-slate-300 hover:text-white md:flex">
+            className="glass hidden items-center gap-1.5 whitespace-nowrap rounded-xl px-2.5 py-1.5 text-[11px] tracking-wider text-slate-300 hover:text-white md:flex">
             {isOwner ? "OWNER · usage not charged" : `${ent.subscription ? ent.plan.name : "FREE"} · ${num(ent.balance)} credits`}
           </button>
           <button
@@ -191,7 +232,7 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
           <InfinityCore
             state={store.core}
             amplitude={store.amplitude}
-            compact={workspaceOpen}
+            compact={workspaceOpen || (isChat && chat.length > 0)}
             onActivate={() => setOpen((o) => new Set([...o, "task", "stream"]))}
           />
           <AnimatePresence>
@@ -229,7 +270,10 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
             </button>
           </div>
         )}
-        {!workspaceOpen && store.taskText && (
+        {isChat && (chat.length > 0 || chatWaiting) && (
+          <ChatPanel turns={chat} waiting={chatWaiting} onClear={() => setChat([])} />
+        )}
+        {!isChat && !workspaceOpen && store.taskText && (
           <div className="flex gap-1.5" aria-label="Open workspace panels">
             {PANELS.map((p) => (
               <button
@@ -248,17 +292,18 @@ export default function App({ me, refreshMe, onLoggedOut }: { me: Me; refreshMe:
           onMode={setMode}
           onSubmit={submit}
           onCancel={() => api.cancel().catch((e) => setNotice((e as Error).message))}
-          busy={busy}
+          busy={isChat ? false : busy}
           disabledReason={disabledReason}
           model={status?.model}
           checkpoints={checkpoints}
+          openModels={openModels}
           onSelectModel={selectModel}
           onAttach={() => (ent.cook ? setLauncher(true) : setUpgrade(true))}
           workspaceName={workspaceName}
           taskText={store.taskText}
           onListening={store.setListening}
           amplitude={store.amplitude}
-          placeholder={ent.cook ? undefined : `COOK locked — ${ent.cook_reason ?? "paid plan required"}. Press Enter to see plans.`}
+          placeholder={isChat ? `Message ${modelName(status?.model)}…` : ent.cook ? undefined : `COOK locked — ${ent.cook_reason ?? "paid plan required"}. Press Enter to see plans.`}
         />
       </footer>
 

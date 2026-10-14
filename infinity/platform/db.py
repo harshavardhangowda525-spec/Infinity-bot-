@@ -134,6 +134,30 @@ MIGRATIONS: list[tuple[int, str]] = [
         CREATE TRIGGER ledger_no_delete BEFORE DELETE ON ledger BEGIN SELECT RAISE(ABORT, 'ledger is append-only'); END;
         """,
     ),
+    (
+        2,
+        # Normal chat usage ('chat'). SQLite cannot alter a CHECK constraint, so the table is
+        # rebuilt with every row copied unchanged.
+        """
+        CREATE TABLE usage_events_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL REFERENCES users(id),
+          api_key_id INTEGER REFERENCES api_keys(id),
+          source TEXT NOT NULL CHECK (source IN ('cook', 'api', 'chat')),
+          ref TEXT NOT NULL,
+          tokens_in INTEGER NOT NULL,
+          tokens_out INTEGER NOT NULL,
+          exact INTEGER NOT NULL,
+          ok INTEGER NOT NULL DEFAULT 1,
+          created_at REAL NOT NULL
+        );
+        INSERT INTO usage_events_v2 (id, user_id, api_key_id, source, ref, tokens_in, tokens_out, exact, ok, created_at)
+          SELECT id, user_id, api_key_id, source, ref, tokens_in, tokens_out, exact, ok, created_at FROM usage_events;
+        DROP TABLE usage_events;
+        ALTER TABLE usage_events_v2 RENAME TO usage_events;
+        CREATE INDEX idx_usage_user ON usage_events(user_id, created_at);
+        """,
+    ),
 ]
 
 

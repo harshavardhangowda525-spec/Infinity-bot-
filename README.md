@@ -77,6 +77,24 @@ infinity bench run --checkpoint runs/my-sft --sft runs/sft-v2      # lm, protoco
 infinity model promote --checkpoint runs/my-sft/checkpoints/step_001000 --reason "..."   # explicit; needs results
 ```
 
+## Open model option (Qwen2.5-Coder 0.5B + your LoRA adapter)
+
+A second, clearly labelled brain next to INFINITY HYPER 5.5. It is an open model that can
+already chat and code a little, and you can fine-tune it on your own computer. HYPER 5.5
+is unchanged.
+
+```bash
+pip install -r training/requirements-training.txt
+python training/scripts/evaluate.py --model hf:Qwen/Qwen2.5-Coder-0.5B-Instruct --label baseline
+python training/scripts/prepare_data.py --config training/configs/default.yaml
+python training/scripts/train.py --config training/configs/default.yaml --smoke
+python training/scripts/train.py --config training/configs/default.yaml
+```
+
+- In the dashboard, the owner picks it in the model selector.
+- **Chat** mode is a plain conversation, open to every account.
+- See `docs/training_guide.md`.
+
 ## Run the agent
 
 ```bash
@@ -135,4 +153,5 @@ cd studio && npm test       # UI: core-state mapping, command dock, execution st
 - `docs/FEATURES.md`: implemented / partial / not implemented
 - `docs/TRAINING_REPORT.md`, `docs/FINETUNE_REPORT.md`: measured training and fine-tuning results
 - `docs/SCALING.md`: 100M / 1B / 7B training guide
-- `docs/PERMISSIONS.md`, `docs/TROUBLESHOOTING.md`
+- `docs/model_audit.md`, `docs/training_guide.md`, `docs/dataset_guide.md`, `docs/evaluation_report.md`: open-model option
+- `docs/PERMISSIONS.md`, `docs/cook_security.md`, `docs/TROUBLESHOOTING.md`

@@ -1,8 +1,9 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { Checkpoint, Mode, ModelStatus } from "../lib/types";
+import type { Checkpoint, DockMode, ModelStatus, OpenModel } from "../lib/types";
 
-export const DOCK_MODES: { id: Mode; label: string; hint: string }[] = [
+export const DOCK_MODES: { id: DockMode; label: string; hint: string }[] = [
+  { id: "chat", label: "Chat", hint: "Normal chat — a plain conversation with the loaded model (no files, no tools)" },
   { id: "ask", label: "Ask", hint: "Explain code and answer questions — read-only" },
   { id: "plan", label: "Plan", hint: "Inspect and produce an implementation plan — read-only" },
   { id: "code", label: "Code", hint: "Implement changes and run checks" },
@@ -35,6 +36,7 @@ export default function CommandDock({
   disabledReason,
   model,
   checkpoints,
+  openModels = [],
   onSelectModel,
   onAttach,
   workspaceName,
@@ -43,15 +45,16 @@ export default function CommandDock({
   amplitude,
   placeholder,
 }: {
-  mode: Mode;
-  onMode: (m: Mode) => void;
+  mode: DockMode;
+  onMode: (m: DockMode) => void;
   onSubmit: (text: string) => Promise<void> | void;
   onCancel: () => void;
   busy: boolean;
   disabledReason: string | null;
   model: ModelStatus | undefined;
   checkpoints: Checkpoint[];
-  onSelectModel: (path: string) => void;
+  openModels?: OpenModel[];
+  onSelectModel: (value: string) => void;
   onAttach: () => void;
   workspaceName: string | null;
   taskText: string | null;
@@ -167,7 +170,7 @@ export default function CommandDock({
       )}
       <div className="flex items-end gap-2">
         <label htmlFor="command" className="sr-only">
-          Task for INFINITY BOT
+          {mode === "chat" ? "Message for INFINITY BOT" : "Task for INFINITY BOT"}
         </label>
         <textarea
           id="command"
@@ -176,7 +179,7 @@ export default function CommandDock({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
-          placeholder={blocked ? disabledReason! : placeholder ?? "What should I build today?"}
+          placeholder={blocked ? disabledReason! : placeholder ?? (mode === "chat" ? "Message INFINITY BOT…" : "What should I build today?")}
           aria-describedby="dock-hint"
           className="scroll-thin min-h-[52px] flex-1 resize-none rounded-xl border border-white/5 bg-black/30 px-3.5 py-3 text-[15px] text-slate-100 placeholder:text-slate-500 focus:border-cyan-glow/40 focus:outline-none"
         />
@@ -219,22 +222,34 @@ export default function CommandDock({
           <span className="max-w-[140px] truncate">{workspaceName ?? "Attach project"}</span>
         </button>
         <label className="sr-only" htmlFor="model-select">
-          Model checkpoint
+          Model
         </label>
         <select
           id="model-select"
-          value={model?.state === "ready" ? model.checkpoint : ""}
+          value={model?.state !== "ready" ? "" : model.family === "open-model" ? `open:${model.id}` : model.checkpoint}
           onChange={(e) => e.target.value && onSelectModel(e.target.value)}
-          disabled={busy || checkpoints.length === 0}
-          title="INFINITY HYPER 5.5 checkpoint"
-          className="max-w-[210px] truncate rounded-lg border border-white/5 bg-black/30 px-2 py-1.5 text-xs text-slate-300"
+          disabled={busy || (checkpoints.length === 0 && openModels.length === 0)}
+          title="Model (INFINITY HYPER 5.5 checkpoints and open models)"
+          className="max-w-[230px] truncate rounded-lg border border-white/5 bg-black/30 px-2 py-1.5 text-xs text-slate-300"
         >
-          {model?.state !== "ready" && <option value="">{checkpoints.length ? "Select checkpoint" : "No checkpoint trained"}</option>}
+          {model?.state !== "ready" && (
+            <option value="">{checkpoints.length || openModels.length ? "Select model" : "No checkpoint trained"}</option>
+          )}
           {checkpoints.map((c) => (
             <option key={c.path} value={c.path}>
               HYPER 5.5 · {c.run} · step {c.step}
             </option>
           ))}
+          {openModels.length > 0 && (
+            <optgroup label="Open models (not HYPER 5.5)">
+              {openModels.map((o) => (
+                <option key={o.id} value={`open:${o.id}`} disabled={o.adapter_present === false}>
+                  {o.label}
+                  {o.adapter ? (o.adapter_present ? " + INFINITY adapter" : " + adapter (not trained yet)") : ""}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         {SR && (
           <button
